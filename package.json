@@ -1,6 +1,6 @@
 {
   "name": "mcp-kaiten",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "type": "module",
   "description": "MCP server for Kaiten — cards, time-logs, boards, comments, users",
   "author": "Artem Zheleznov (https://github.com/iamtemazhe)",

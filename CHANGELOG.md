@@ -1,10 +1,19 @@
 # Changelog
 
+## [1.0.2] - 2026-03-21
+
+### Fixed
+- Corrected sort parameters for board and space card listing
+
+### Changed
+- Card types endpoint is now global — no board ID required
+- Condition filter supports "all" option (1=active, 2=archived, 3=all)
+- Improved tool descriptions with references to related tools
+
 ## [1.0.1] - 2026-03-20
 
 ### Fixed
 - Fixed API endpoints for card creation, search, board/space listing, and card types
-- Corrected sort parameters for board and space card listing
 - Time-log creation now requires role ID (mandatory Kaiten API field)
 - Time-log deletion now requires card ID (alternative endpoint bypassing WAF)
 
@@ -13,9 +22,6 @@
 - Integration tests auto-cleanup on failure
 
 ### Changed
-- Card types endpoint is now global — no board ID required
-- Condition filter supports "all" option (1=active, 2=archived, 3=all)
-- Improved tool descriptions with references to related tools
 - Time-log update supports optional role ID
 
 ## [1.0.0] - 2026-03-20
