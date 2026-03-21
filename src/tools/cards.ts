@@ -1,70 +1,77 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { get, post, patch, del } from "../client.js";
-import { getDefaultSpaceId } from "../config.js";
 import {
   jsonResult, textResult, handleTool,
 } from "../utils/errors.js";
 import {
   type Obj, optionalInt, paginationSchema,
   conditionSchema, buildOptionalBody,
-  addOptionalParams,
 } from "../utils/schemas.js";
 import {
   simplifyCard, simplifyList,
   verbositySchema,
-  type Verbosity,
+  asV,
 } from "../utils/simplify.js";
+import { buildSearchQuery } from "../utils/queryBuilder.js";
 
 export function registerCardTools(
   server: McpServer,
 ): void {
-  server.tool(
+  server.registerTool(
     "kaiten_get_card",
-    "Get full card details by ID. Find cardId via "
-    + "kaiten_search_cards or kaiten_get_board_cards. "
-    + "Set includeChildren=true to also fetch "
-    + "child cards.",
     {
-      cardId: z.number().int().describe("Card ID"),
-      includeChildren: z.boolean().default(false)
-        .describe("Also fetch child cards"),
-      verbosity: verbositySchema,
+      title: "Get Card",
+      description:
+        "Get card by ID. verbosity=max; includeChildren for "
+        + "child cards. ID from kaiten_search_cards or "
+        + "kaiten_get_board_cards.",
+      inputSchema: {
+        cardId: z.number().int().describe("Card ID"),
+        includeChildren: z.boolean().default(false)
+          .describe("Also fetch child cards"),
+        verbosity: verbositySchema,
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: true,
+        idempotentHint: true,
+      },
     },
     handleTool(async ({
       cardId, includeChildren, verbosity,
     }) => {
-      const v = verbosity as Verbosity;
+      const v = asV(verbosity);
+
+      if (includeChildren) {
+        const [card, children] = await Promise.all([
+          get<Obj>(`/cards/${cardId}`),
+          get(`/cards/${cardId}/children`)
+            .catch(() => []),
+        ]);
+        card.children = simplifyList(
+          children, simplifyCard, v,
+        );
+        return jsonResult(simplifyCard(card, v));
+      }
+
       const card = await get<Obj>(
         `/cards/${cardId}`,
       );
-
-      if (includeChildren) {
-        try {
-          const children = await get(
-            `/cards/${cardId}/children`,
-          );
-          card.children = simplifyList(
-            children, simplifyCard, v,
-          );
-        } catch {
-          card.children = [];
-        }
-      }
-
       return jsonResult(simplifyCard(card, v));
     }),
   );
 
-  server.tool(
+  server.registerTool(
     "kaiten_search_cards",
-    "Search cards with filters and pagination. "
-    + "Use kaiten_list_boards/kaiten_list_spaces "
-    + "to get boardId/spaceId. Always specify one "
-    + "to avoid large responses. Use root word "
-    + "forms for query (case-insensitive title "
-    + "match).",
     {
+      title: "Search Cards",
+      description:
+        "Search cards with filters and pagination. Pass boardId "
+        + "or spaceId to limit scope. Use kaiten_get_card for "
+        + "details.",
+      inputSchema: {
       query: z.string().optional().describe(
         "Search query",
       ),
@@ -79,7 +86,9 @@ export function registerCardTools(
       typeId: optionalInt(
         "Filter by card type ID",
       ),
-      state: optionalInt("Card state filter"),
+      state: optionalInt(
+        "Card state: draft|queued|in_progress|done",
+      ),
       condition: conditionSchema,
       asap: z.boolean().optional().describe(
         "Filter urgent cards",
@@ -120,6 +129,16 @@ export function registerCardTools(
       tagIds: z.string().optional().describe(
         "Comma-separated tag IDs",
       ),
+      typeIds: z.string().optional().describe(
+        "Comma-separated card type IDs",
+      ),
+      doneOnTime: z.boolean().optional().describe(
+        "Filter by done on time",
+      ),
+      excludeArchived: z.boolean().optional()
+        .describe("Exclude archived cards"),
+      excludeCompleted: z.boolean().optional()
+        .describe("Exclude completed cards"),
       sortBy: z.enum(
         ["created", "updated", "title"],
       )
@@ -130,44 +149,17 @@ export function registerCardTools(
         .describe("Sort direction"),
       ...paginationSchema,
       verbosity: verbositySchema,
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: true,
+        idempotentHint: true,
+      },
     },
     handleTool(async (p) => {
-      const v = p.verbosity as Verbosity;
-      const q: Record<string, string> = {
-        limit: String(p.limit),
-        skip: String(p.offset),
-        condition: String(p.condition),
-        order_by: p.sortBy,
-        order_direction: p.sortDirection,
-        search_fields: "title",
-      };
-
-      addOptionalParams(q, [
-        ["query", p.query],
-        ["board_id", p.boardId],
-        [
-          "space_id",
-          p.spaceId ?? getDefaultSpaceId(),
-        ],
-        ["column_id", p.columnId],
-        ["lane_id", p.laneId],
-        ["owner_id", p.ownerId],
-        ["type_id", p.typeId],
-        ["state", p.state],
-        ["asap", p.asap],
-        ["archived", p.archived],
-        ["overdue", p.overdue],
-        ["with_due_date", p.withDueDate],
-        ["created_before", p.createdBefore],
-        ["created_after", p.createdAfter],
-        ["updated_before", p.updatedBefore],
-        ["updated_after", p.updatedAfter],
-        ["due_date_before", p.dueDateBefore],
-        ["due_date_after", p.dueDateAfter],
-        ["owner_ids", p.ownerIds],
-        ["member_ids", p.memberIds],
-        ["tag_ids", p.tagIds],
-      ]);
+      const v = asV(p.verbosity);
+      const q = buildSearchQuery(p);
 
       const cards = await get("/cards", q);
       return jsonResult(
@@ -176,79 +168,91 @@ export function registerCardTools(
     }),
   );
 
-  server.tool(
+  const fetchCardsByScope = (
+    scopeKey: string,
+    scopeId: number,
+    condition: number,
+    limit: number,
+    offset: number,
+    verbosity: string,
+  ) => {
+    const v = asV(verbosity);
+    return get("/cards", {
+      [scopeKey]: String(scopeId),
+      limit: String(limit),
+      skip: String(offset),
+      condition: String(condition),
+      order_by: "created",
+      order_direction: "desc",
+    }).then((cards) =>
+      jsonResult(simplifyList(cards, simplifyCard, v)),
+    );
+  };
+
+  server.registerTool(
     "kaiten_get_space_cards",
-    "List cards in a space, sorted by creation "
-    + "date (newest first). Use "
-    + "kaiten_list_spaces first to find the "
-    + "space ID.",
     {
-      spaceId: z.number().int().describe("Space ID"),
-      condition: conditionSchema,
-      ...paginationSchema,
-      verbosity: verbositySchema,
+      title: "List Space Cards",
+      description:
+        "Recent cards in a space (newest first, no filters). "
+        + "For filtered search use kaiten_search_cards.",
+      inputSchema: {
+        spaceId: z.number().int().describe("Space ID"),
+        condition: conditionSchema,
+        ...paginationSchema,
+        verbosity: verbositySchema,
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: true,
+        idempotentHint: true,
+      },
     },
     handleTool(async ({
       spaceId, condition, limit, offset, verbosity,
-    }) => {
-      const v = verbosity as Verbosity;
-      const cards = await get(
-        "/cards",
-        {
-          space_id: String(spaceId),
-          limit: String(limit),
-          skip: String(offset),
-          condition: String(condition),
-          order_by: "created",
-          order_direction: "desc",
-        },
-      );
-      return jsonResult(
-        simplifyList(cards, simplifyCard, v),
-      );
-    }),
+    }) => fetchCardsByScope(
+      "space_id", spaceId,
+      condition, limit, offset, verbosity,
+    )),
   );
 
-  server.tool(
+  server.registerTool(
     "kaiten_get_board_cards",
-    "List cards on a board, sorted by creation "
-    + "date (newest first). Use "
-    + "kaiten_list_boards first to find the "
-    + "board ID.",
     {
-      boardId: z.number().int().describe("Board ID"),
-      condition: conditionSchema,
-      ...paginationSchema,
-      verbosity: verbositySchema,
+      title: "List Board Cards",
+      description:
+        "Recent cards on a board (newest first, no filters). "
+        + "For filtered search use kaiten_search_cards.",
+      inputSchema: {
+        boardId: z.number().int().describe("Board ID"),
+        condition: conditionSchema,
+        ...paginationSchema,
+        verbosity: verbositySchema,
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: true,
+        idempotentHint: true,
+      },
     },
     handleTool(async ({
       boardId, condition, limit, offset, verbosity,
-    }) => {
-      const v = verbosity as Verbosity;
-      const cards = await get(
-        "/cards",
-        {
-          board_id: String(boardId),
-          limit: String(limit),
-          skip: String(offset),
-          condition: String(condition),
-          order_by: "created",
-          order_direction: "desc",
-        },
-      );
-      return jsonResult(
-        simplifyList(cards, simplifyCard, v),
-      );
-    }),
+    }) => fetchCardsByScope(
+      "board_id", boardId,
+      condition, limit, offset, verbosity,
+    )),
   );
 
-  server.tool(
+  server.registerTool(
     "kaiten_create_card",
-    "Create a new card on a board. Requires "
-    + "boardId and columnId (use "
-    + "kaiten_list_columns to find). Returns the "
-    + "created card.",
     {
+      title: "Create Card",
+      description:
+        "Create card. Requires boardId + columnId from "
+        + "kaiten_list_columns. Optional: laneId, typeId.",
+      inputSchema: {
       boardId: z.number().int().describe("Board ID"),
       columnId: z.number().int().describe(
         "Column ID",
@@ -275,9 +279,16 @@ export function registerCardTools(
         "Due date (ISO 8601)",
       ),
       verbosity: verbositySchema,
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        openWorldHint: true,
+        idempotentHint: false,
+      },
     },
     handleTool(async (p) => {
-      const v = p.verbosity as Verbosity;
+      const v = asV(p.verbosity);
       const body = {
         board_id: p.boardId,
         column_id: p.columnId,
@@ -301,12 +312,15 @@ export function registerCardTools(
     }),
   );
 
-  server.tool(
+  server.registerTool(
     "kaiten_update_card",
-    "Update card fields. Only provided fields are "
-    + "changed. Use kaiten_list_columns for "
-    + "columnId, kaiten_list_lanes for laneId.",
     {
+      title: "Update Card",
+      description:
+        "Update card fields. For moves use "
+        + "kaiten_list_columns, kaiten_list_lanes, "
+        + "kaiten_list_boards IDs.",
+      inputSchema: {
       cardId: z.number().int().describe("Card ID"),
       title: z.string().optional().describe(
         "New title",
@@ -330,11 +344,18 @@ export function registerCardTools(
         "Due date (ISO 8601)",
       ),
       verbosity: verbositySchema,
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        openWorldHint: true,
+        idempotentHint: false,
+      },
     },
     handleTool(async ({
       cardId, verbosity, ...fields
     }) => {
-      const v = verbosity as Verbosity;
+      const v = asV(verbosity);
       const body = buildOptionalBody([
         ["title", fields.title],
         ["description", fields.description],
@@ -356,12 +377,23 @@ export function registerCardTools(
     }),
   );
 
-  server.tool(
+  server.registerTool(
     "kaiten_delete_card",
-    "Permanently delete a card. Cannot be undone. "
-    + "Get cardId from kaiten_search_cards.",
     {
-      cardId: z.number().int().describe("Card ID"),
+      title: "Delete Card",
+      description:
+        "Permanently delete a card (cannot be undone). "
+        + "Resolve cardId via kaiten_search_cards or "
+        + "kaiten_get_card.",
+      inputSchema: {
+        cardId: z.number().int().describe("Card ID"),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        openWorldHint: true,
+        idempotentHint: false,
+      },
     },
     handleTool(async ({ cardId }) => {
       await del(`/cards/${cardId}`);

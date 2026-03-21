@@ -10,33 +10,36 @@ import {
 import {
   simplifyTimelog, simplifyList,
   verbositySchema,
-  type Verbosity,
+  asV,
 } from "../utils/simplify.js";
 
 export function registerTimelogTools(
   server: McpServer,
 ): void {
-  server.tool(
+  server.registerTool(
     "kaiten_get_user_timelogs",
-    "Get time-logs for a user in a date range. "
-    + "Use kaiten_get_current_user first to get "
-    + "userId. Dates must be ISO 8601.",
     {
-      userId: z.number().int().describe("User ID"),
-      from: z.string().describe(
-        "Start date (ISO 8601, e.g. "
-        + "2026-03-01T00:00:00Z)",
-      ),
-      to: z.string().describe(
-        "End date (ISO 8601, e.g. "
-        + "2026-03-31T23:59:59Z)",
-      ),
-      verbosity: verbositySchema,
+      title: "List User Timelogs",
+      description:
+        "User timelogs, from/to ISO. userId from "
+        + "kaiten_get_current_user; titles via kaiten_get_card.",
+      inputSchema: {
+        userId: z.number().int().describe("User ID"),
+        from: z.string().describe("ISO start"),
+        to: z.string().describe("ISO end"),
+        verbosity: verbositySchema,
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: true,
+        idempotentHint: true,
+      },
     },
     handleTool(async ({
       userId, from, to, verbosity,
     }) => {
-      const v = verbosity as Verbosity;
+      const v = asV(verbosity);
       const logs = await get(
         `/users/${userId}/time-logs`, { from, to },
       );
@@ -46,17 +49,27 @@ export function registerTimelogTools(
     }),
   );
 
-  server.tool(
+  server.registerTool(
     "kaiten_get_card_timelogs",
-    "Get time-logs for a card. Use logId from "
-    + "results in kaiten_update_timelog/"
-    + "kaiten_delete_timelog.",
     {
-      cardId: z.number().int().describe("Card ID"),
-      verbosity: verbositySchema,
+      title: "List Card Timelogs",
+      description:
+        "Card timelogs. logId for kaiten_update_timelog/"
+        + "kaiten_delete_timelog; cardId from "
+        + "kaiten_search_cards.",
+      inputSchema: {
+        cardId: z.number().int().describe("Card ID"),
+        verbosity: verbositySchema,
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: true,
+        idempotentHint: true,
+      },
     },
     handleTool(async ({ cardId, verbosity }) => {
-      const v = verbosity as Verbosity;
+      const v = asV(verbosity);
       const logs = await get(
         `/cards/${cardId}/time-logs`,
       );
@@ -66,32 +79,39 @@ export function registerTimelogTools(
     }),
   );
 
-  server.tool(
+  server.registerTool(
     "kaiten_create_timelog",
-    "Log time spent on a card. Time is in "
-    + "minutes (e.g. 90 for 1.5 hours). roleId is "
-    + "required — use kaiten_get_user_roles to find "
-    + "available roles.",
     {
+      title: "Create Timelog",
+      description:
+        "Log time on card. roleId from kaiten_get_user_roles; "
+        + "cardId from kaiten_search_cards; see "
+        + "kaiten_get_card_timelogs.",
+      inputSchema: {
       cardId: z.number().int().describe("Card ID"),
       timeSpentMinutes: z.number().int().min(1)
-        .describe("Time spent in minutes"),
-      roleId: z.number().int().describe(
-        "Role ID (use kaiten_get_user_roles)",
-      ),
+        .describe("Minutes spent"),
+      roleId: z.number().int().describe("Role ID"),
       comment: z.string().optional().describe(
-        "Comment for the time-log",
+        "Log comment",
       ),
       forDate: z.string().optional().describe(
-        "Date for the log (ISO 8601)",
+        "Log date (ISO 8601, e.g. 2026-03-21)",
       ),
       verbosity: verbositySchema,
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        openWorldHint: true,
+        idempotentHint: false,
+      },
     },
     handleTool(async ({
       cardId, timeSpentMinutes, roleId,
       comment, forDate, verbosity,
     }) => {
-      const v = verbosity as Verbosity;
+      const v = asV(verbosity);
       const body = {
         time_spent: timeSpentMinutes,
         role_id: roleId,
@@ -108,34 +128,44 @@ export function registerTimelogTools(
     }),
   );
 
-  server.tool(
+  server.registerTool(
     "kaiten_update_timelog",
-    "Update a time-log entry. Only provided "
-    + "fields are changed. Get logId from "
-    + "kaiten_get_card_timelogs.",
     {
+      title: "Update Timelog",
+      description:
+        "Patch timelog. logId and cardId from "
+        + "kaiten_get_card_timelogs or "
+        + "kaiten_get_user_timelogs.",
+      inputSchema: {
       cardId: z.number().int().describe("Card ID"),
       logId: z.number().int().describe(
         "Time-log ID",
       ),
       timeSpentMinutes: z.number().int().min(1)
         .optional()
-        .describe("New time spent in minutes"),
+        .describe("New minutes"),
       roleId: z.number().int().optional().describe(
-        "New role ID",
+        "New role",
       ),
       comment: z.string().optional().describe(
         "New comment",
       ),
       forDate: z.string().optional().describe(
-        "New date (ISO 8601)",
+        "New date (ISO 8601, e.g. 2026-03-21)",
       ),
       verbosity: verbositySchema,
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        openWorldHint: true,
+        idempotentHint: false,
+      },
     },
     handleTool(async ({
       cardId, logId, verbosity, ...fields
     }) => {
-      const v = verbosity as Verbosity;
+      const v = asV(verbosity);
       const body = buildOptionalBody([
         ["time_spent", fields.timeSpentMinutes],
         ["role_id", fields.roleId],
@@ -150,17 +180,26 @@ export function registerTimelogTools(
     }),
   );
 
-  server.tool(
+  server.registerTool(
     "kaiten_delete_timelog",
-    "Delete a time-log entry. Requires both "
-    + "cardId and logId. Get logId from "
-    + "kaiten_get_card_timelogs or "
-    + "kaiten_get_user_timelogs.",
     {
-      cardId: z.number().int().describe("Card ID"),
-      logId: z.number().int().describe(
-        "Time-log ID",
-      ),
+      title: "Delete Timelog",
+      description:
+        "Delete timelog. cardId and logId from "
+        + "kaiten_get_card_timelogs or "
+        + "kaiten_get_user_timelogs.",
+      inputSchema: {
+        cardId: z.number().int().describe("Card ID"),
+        logId: z.number().int().describe(
+          "Time-log ID",
+        ),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        openWorldHint: true,
+        idempotentHint: false,
+      },
     },
     handleTool(async ({ cardId, logId }) => {
       await del(

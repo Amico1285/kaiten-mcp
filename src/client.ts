@@ -1,9 +1,14 @@
+import { randomUUID } from "node:crypto";
 import { getConfig } from "./config.js";
+import { logger } from "./utils/logger.js";
 
 const MAX_RETRIES = 3;
 const BASE_DELAY_MS = 1000;
 const RETRYABLE_STATUSES = new Set(
   [408, 429, 500, 502, 503, 504],
+);
+const IDEMPOTENT_METHODS = new Set(
+  ["POST", "PATCH", "PUT"],
 );
 
 export class KaitenApiError extends Error {
@@ -21,14 +26,29 @@ export class KaitenApiError extends Error {
 
 function hint(status: number): string {
   switch (status) {
-    case 401: return " (token expired or invalid)";
-    case 403: return " (access denied)";
-    case 404: return " (not found)";
-    case 409: return " (conflict)";
-    case 422: return " (validation error)";
-    case 429: return " (rate limited, retry later)";
-    case 502: return " (server unavailable)";
-    case 503: return " (service unavailable)";
+    case 401:
+      return " (token expired or invalid). "
+        + "Regenerate at Profile → API Key";
+    case 403:
+      return " (access denied). "
+        + "Check space/board permissions";
+    case 404:
+      return " (not found). Verify ID via "
+        + "kaiten_search_cards or kaiten_list_spaces";
+    case 409:
+      return " (conflict). Resource was modified "
+        + "concurrently, re-read and retry";
+    case 422:
+      return " (validation error). Check required "
+        + "fields: title, boardId, columnId";
+    case 429:
+      return " (rate limited). Retry in a moment";
+    case 502:
+      return " (server unavailable). "
+        + "Check VPN connection and host availability";
+    case 503:
+      return " (service unavailable). "
+        + "Kaiten may be under maintenance";
     default: return "";
   }
 }
@@ -73,6 +93,10 @@ async function request<T>(
     "Content-Type": "application/json",
   };
 
+  if (IDEMPOTENT_METHODS.has(method)) {
+    headers["X-Idempotency-Key"] = randomUUID();
+  }
+
   let lastError: Error | undefined;
 
   for (
@@ -98,6 +122,9 @@ async function request<T>(
           ? {} as T
           : await resp.json() as T;
         clearTimeout(timer);
+        logger.debug(
+          `${method} ${path} → ${resp.status}`,
+        );
         return result;
       }
 
@@ -109,7 +136,7 @@ async function request<T>(
         && shouldRetry(resp.status)
       ) {
         const delay = getRetryDelay(attempt, resp);
-        console.error(
+        logger.warn(
           `Retry ${attempt + 1}/${MAX_RETRIES}`
           + ` ${method} ${path} → ${resp.status}`
           + ` (wait ${Math.round(delay)}ms)`,
@@ -136,7 +163,7 @@ async function request<T>(
         const delay = getRetryDelay(attempt);
         const reason = isTimeout
           ? "timeout" : "network error";
-        console.error(
+        logger.warn(
           `Retry ${attempt + 1}/${MAX_RETRIES}`
           + ` ${method} ${path} → ${reason}`
           + ` (wait ${Math.round(delay)}ms)`,
@@ -184,8 +211,45 @@ export function patch<T>(
   return request<T>("PATCH", path, body);
 }
 
+export function put<T>(
+  path: string,
+  body?: unknown,
+): Promise<T> {
+  return request<T>("PUT", path, body);
+}
+
 export function del<T = void>(
   path: string,
 ): Promise<T> {
   return request<T>("DELETE", path);
+}
+
+export async function uploadFile<T>(
+  path: string,
+  fileName: string,
+  contentBase64: string,
+  contentType: string,
+): Promise<T> {
+  const cfg = getConfig();
+  const url = `${cfg.baseUrl}${path}`;
+
+  const buf = Buffer.from(contentBase64, "base64");
+  const blob = new Blob([buf], { type: contentType });
+  const form = new FormData();
+  form.append("file", blob, fileName);
+
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${cfg.token}`,
+    },
+    body: form,
+  });
+
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new KaitenApiError(resp.status, text, url);
+  }
+
+  return resp.json() as Promise<T>;
 }

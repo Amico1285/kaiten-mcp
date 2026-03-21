@@ -8,23 +8,33 @@ import type { Obj } from "../utils/schemas.js";
 import {
   simplifyComment, simplifyList,
   verbositySchema,
-  type Verbosity,
+  asV,
 } from "../utils/simplify.js";
 
 export function registerCommentTools(
   server: McpServer,
 ): void {
-  server.tool(
+  server.registerTool(
     "kaiten_get_card_comments",
-    "Get all comments for a card, ordered by "
-    + "date. Use commentId from results in "
-    + "kaiten_update_comment/kaiten_delete_comment.",
     {
-      cardId: z.number().int().describe("Card ID"),
-      verbosity: verbositySchema,
+      title: "List Card Comments",
+      description:
+        "Comments. commentId for kaiten_update_comment/"
+        + "kaiten_delete_comment; cardId from "
+        + "kaiten_search_cards/kaiten_get_card.",
+      inputSchema: {
+        cardId: z.number().int().describe("Card ID"),
+        verbosity: verbositySchema,
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: true,
+        idempotentHint: true,
+      },
     },
     handleTool(async ({ cardId, verbosity }) => {
-      const v = verbosity as Verbosity;
+      const v = asV(verbosity);
       const comments = await get(
         `/cards/${cardId}/comments`,
       );
@@ -34,22 +44,29 @@ export function registerCommentTools(
     }),
   );
 
-  server.tool(
+  server.registerTool(
     "kaiten_create_comment",
-    "Add a comment to a card. Get cardId from "
-    + "kaiten_search_cards. Text supports HTML "
-    + "(<b>, <i>, <a>, <ul>, <ol>).",
     {
-      cardId: z.number().int().describe("Card ID"),
-      text: z.string().describe(
-        "Comment text (HTML)",
-      ),
-      verbosity: verbositySchema,
+      title: "Create Comment",
+      description:
+        "Add HTML comment. cardId from kaiten_search_cards "
+        + "or kaiten_get_card; list: kaiten_get_card_comments.",
+      inputSchema: {
+        cardId: z.number().int().describe("Card ID"),
+        text: z.string().describe("HTML comment"),
+        verbosity: verbositySchema,
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        openWorldHint: true,
+        idempotentHint: false,
+      },
     },
     handleTool(async ({
       cardId, text, verbosity,
     }) => {
-      const v = verbosity as Verbosity;
+      const v = asV(verbosity);
       const comment = await post<Obj>(
         `/cards/${cardId}/comments`, { text },
       );
@@ -59,23 +76,32 @@ export function registerCommentTools(
     }),
   );
 
-  server.tool(
+  server.registerTool(
     "kaiten_update_comment",
-    "Replace comment text. Get commentId from "
-    + "kaiten_get_card_comments. Text supports "
-    + "HTML.",
     {
-      cardId: z.number().int().describe("Card ID"),
-      commentId: z.number().int().describe(
-        "Comment ID",
-      ),
-      text: z.string().describe("New text (HTML)"),
-      verbosity: verbositySchema,
+      title: "Update Comment",
+      description:
+        "Replace comment HTML. commentId from "
+        + "kaiten_get_card_comments; cardId must match.",
+      inputSchema: {
+        cardId: z.number().int().describe("Card ID"),
+        commentId: z.number().int().describe(
+          "Comment ID",
+        ),
+        text: z.string().describe("New HTML"),
+        verbosity: verbositySchema,
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        openWorldHint: true,
+        idempotentHint: false,
+      },
     },
     handleTool(async ({
       cardId, commentId, text, verbosity,
     }) => {
-      const v = verbosity as Verbosity;
+      const v = asV(verbosity);
       const comment = await patch<Obj>(
         `/cards/${cardId}/comments/${commentId}`,
         { text },
@@ -86,15 +112,25 @@ export function registerCommentTools(
     }),
   );
 
-  server.tool(
+  server.registerTool(
     "kaiten_delete_comment",
-    "Permanently delete a comment. Get commentId "
-    + "from kaiten_get_card_comments.",
     {
-      cardId: z.number().int().describe("Card ID"),
-      commentId: z.number().int().describe(
-        "Comment ID",
-      ),
+      title: "Delete Comment",
+      description:
+        "Delete comment. commentId and cardId from "
+        + "kaiten_get_card_comments.",
+      inputSchema: {
+        cardId: z.number().int().describe("Card ID"),
+        commentId: z.number().int().describe(
+          "Comment ID",
+        ),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        openWorldHint: true,
+        idempotentHint: false,
+      },
     },
     handleTool(async ({ cardId, commentId }) => {
       await del(

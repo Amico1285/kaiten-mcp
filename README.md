@@ -1,6 +1,8 @@
 # mcp-kaiten
 
-[Русская версия](README.ru.md)
+[Русский](docs/README.ru.md) | [中文](docs/README.cn.md)
+
+[Why mcp-kaiten exists](docs/WHYIEXIST.md)
 
 MCP server for **Kaiten** — cards, time-logs, boards, comments, users.
 
@@ -84,6 +86,46 @@ The server starts automatically when the MCP client connects.
 | `kaiten_list_lanes` | List lanes (swimlanes) of a board |
 | `kaiten_list_card_types` | List card types of a board |
 
+### Subtasks
+
+| Tool | Description |
+|------|-------------|
+| `kaiten_list_subtasks` | List child cards |
+| `kaiten_attach_subtask` | Attach a card as subtask |
+| `kaiten_detach_subtask` | Detach a subtask |
+
+### Tags
+
+| Tool | Description |
+|------|-------------|
+| `kaiten_list_tags` | List all workspace tags |
+| `kaiten_add_tag` | Add a tag to a card |
+| `kaiten_remove_tag` | Remove a tag from a card |
+
+### Checklists
+
+| Tool | Description |
+|------|-------------|
+| `kaiten_get_checklists` | Get checklists for a card |
+| `kaiten_create_checklist` | Create a new checklist |
+| `kaiten_delete_checklist` | Delete a checklist |
+| `kaiten_add_checklist_item` | Add an item to a checklist |
+| `kaiten_update_checklist_item` | Update a checklist item |
+
+### Attachments
+
+| Tool | Description |
+|------|-------------|
+| `kaiten_list_files` | List card attachments |
+| `kaiten_upload_file` | Upload a file to a card |
+| `kaiten_delete_file` | Delete a card attachment |
+
+### Custom Fields
+
+| Tool | Description |
+|------|-------------|
+| `kaiten_list_custom_properties` | List custom properties for a space |
+
 ### Users
 
 | Tool | Description |
@@ -91,6 +133,21 @@ The server starts automatically when the MCP client connects.
 | `kaiten_get_current_user` | Get the authenticated user |
 | `kaiten_list_users` | List all users |
 | `kaiten_get_user_roles` | Get roles of the current user |
+
+### Resources
+
+| URI | Description |
+|-----|-------------|
+| `kaiten://spaces` | All spaces with IDs and titles |
+| `kaiten://boards` | All boards across spaces (id, title, spaceId) |
+
+### Prompts
+
+| Name | Description |
+|------|-------------|
+| `create-card` | Step-by-step card creation workflow |
+| `time-report` | Generate time tracking report for a date range |
+| `board-overview` | Summarize board: columns, cards, overdue items |
 
 ---
 
@@ -109,42 +166,32 @@ Kaiten uses API tokens for authentication. OAuth is not supported by the Kaiten 
 | `KAITEN_API_TOKEN` | yes | API token (Bearer) |
 | `KAITEN_URL` | yes | Kaiten instance URL (e.g. `https://your-domain.kaiten.ru`) |
 | `KAITEN_DEFAULT_SPACE_ID` | no | Default space ID for card search (if `spaceId` is not specified) |
-| `KAITEN_REQUEST_TIMEOUT_MS` | no | HTTP request timeout in ms (default: `10000`, range: 1000–60000) |
-| `KAITEN_CACHE_TTL_MS` | no | TTL for spaces/boards/users cache in ms (default: `300000`, 0 to disable) |
+| `KAITEN_ALLOWED_SPACE_IDS` | no | Comma-separated space IDs to restrict access |
+| `KAITEN_ALLOWED_BOARD_IDS` | no | Comma-separated board IDs to restrict access |
 
 ---
 
 ## Verbosity
 
-Every tool accepts an optional `verbosity` parameter (default: `min`):
-
-| Level | Description | Card fields |
-|-------|-------------|-------------|
-| `min` | Compact, saves context | 9 fields: id, title, url, board, column, owner, updated, asap, blocked |
-| `normal` | Useful fields | ~22 fields: + dates, state, tags, members, lane, type, size, due_date |
-| `max` | Full analysis | ~30 fields: + description, checklists, blockers, external_links |
-| `raw` | Full API response | All fields as returned by Kaiten API |
+Every tool accepts an optional `verbosity` parameter (default: `min`) to control response size. Use `min` for compact responses that save LLM context, `normal` for common fields, `max` for full detail, or `raw` for the unprocessed API response.
 
 ## Reliability
 
-- **Request timeout:** configurable HTTP timeout via `AbortController` (default 10s). Prevents indefinite hangs on network issues.
-- **Automatic retries:** failed requests (429, 408, 5xx, network errors, timeouts) are retried up to 3 times with exponential backoff and jitter. `Retry-After` header is respected.
-- **TTL cache:** spaces, boards, columns, lanes, card types, and users are cached in memory (default 5 min). Eliminates redundant API calls for reference data.
-- **Env validation:** all configuration is validated at startup via Zod. Invalid values produce clear error messages and prevent silent failures.
-- **Response truncation:** responses over 100k characters are automatically truncated to prevent context overflow.
-- **Crash protection:** uncaught exceptions and unhandled rejections are logged to stderr without crashing the server.
-
-## Known Limitations
-
-- **Rate limits:** Kaiten API may throttle requests. Retries handle transient 429 errors, but sustained overload requires reducing request frequency.
+- **Automatic retries:** failed requests (429, 5xx, network errors, timeouts) are retried up to 3 times with exponential backoff.
+- **Idempotency:** write requests include idempotency keys to prevent duplicate mutations on retries.
+- **Caching:** reference data (spaces, boards, users, roles) is cached with automatic background refresh.
+- **Response optimization:** compact JSON, automatic truncation of large responses, verbosity control.
+- **Crash protection:** unhandled errors are logged without crashing the server.
+- **Actionable errors:** error messages include hints on what to do next.
 
 ## Troubleshooting
 
 - **Server won't start:** check that `KAITEN_API_TOKEN` and `KAITEN_URL` are set in the MCP config `env` block.
 - **401 errors:** token may be expired or invalid. Generate a new one in Kaiten profile.
-- **502 errors:** Kaiten instance may be temporarily unavailable. The server will retry automatically.
 - **Large responses:** use filters (`boardId`, `spaceId`) or lower `limit` to reduce response size.
 
-## License
+---
 
-[MIT](LICENSE)
+[Changelog](CHANGELOG.md)
+
+[License](LICENSE)

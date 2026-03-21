@@ -1,26 +1,35 @@
-import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { get } from "../client.js";
 import { jsonResult, handleTool } from "../utils/errors.js";
 import type { Obj } from "../utils/schemas.js";
-import { usersCache } from "../utils/cache.js";
+import { usersCache, rolesCache } from "../utils/cache.js";
 import {
   simplifyUser, simplifyList,
   verbositySchema,
-  type Verbosity,
+  asV,
 } from "../utils/simplify.js";
 
 export function registerUserTools(
   server: McpServer,
 ): void {
-  server.tool(
+  server.registerTool(
     "kaiten_get_current_user",
-    "Get the authenticated user's profile: id, "
-    + "name, email. Use the id for "
-    + "kaiten_get_user_timelogs.",
-    { verbosity: verbositySchema },
+    {
+      title: "Get Current User",
+      description:
+        "Current user (id, name, email). id for "
+        + "kaiten_get_user_timelogs and kaiten_search_cards "
+        + "ownerId.",
+      inputSchema: { verbosity: verbositySchema },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: true,
+        idempotentHint: true,
+      },
+    },
     handleTool(async ({ verbosity }) => {
-      const v = verbosity as Verbosity;
+      const v = asV(verbosity);
       const user = await usersCache.getOrFetch(
         "current",
         () => get<Obj>("/users/current"),
@@ -29,14 +38,23 @@ export function registerUserTools(
     }),
   );
 
-  server.tool(
+  server.registerTool(
     "kaiten_list_users",
-    "List all users in the organization. Use IDs "
-    + "for ownerId/memberIds in "
-    + "kaiten_search_cards.",
-    { verbosity: verbositySchema },
+    {
+      title: "List Users",
+      description:
+        "Org users. IDs for kaiten_search_cards filters and "
+        + "kaiten_create_card ownerId.",
+      inputSchema: { verbosity: verbositySchema },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: true,
+        idempotentHint: true,
+      },
+    },
     handleTool(async ({ verbosity }) => {
-      const v = verbosity as Verbosity;
+      const v = asV(verbosity);
       const users = await usersCache.getOrFetch(
         "all", () => get("/users"),
       );
@@ -46,14 +64,26 @@ export function registerUserTools(
     }),
   );
 
-  server.tool(
+  server.registerTool(
     "kaiten_get_user_roles",
-    "Get roles of the current user. Use roleId in "
-    + "kaiten_create_timelog.",
-    { verbosity: verbositySchema },
+    {
+      title: "Get User Roles",
+      description:
+        "Current user roles per space. roleId for "
+        + "kaiten_create_timelog.",
+      inputSchema: { verbosity: verbositySchema },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: true,
+        idempotentHint: true,
+      },
+    },
     handleTool(async ({ verbosity }) => {
-      const v = verbosity as Verbosity;
-      const roles = await get("/user-roles");
+      const v = asV(verbosity);
+      const roles = await rolesCache.getOrFetch(
+        "roles", () => get("/user-roles"),
+      );
       if (v === "raw") return jsonResult(roles);
       if (!Array.isArray(roles)) {
         return jsonResult(roles);

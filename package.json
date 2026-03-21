@@ -1,6 +1,6 @@
 {
   "name": "mcp-kaiten",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "type": "module",
   "description": "MCP server for Kaiten — cards, time-logs, boards, comments, users",
   "author": "Artem Zheleznov (https://github.com/iamtemazhe)",
@@ -12,20 +12,21 @@
   "bugs": {
     "url": "https://github.com/iamtemazhe/mcp-kaiten/issues"
   },
-  "main": "dist/index.js",
+  "main": "build/index.js",
   "bin": {
-    "mcp-kaiten": "dist/index.js"
+    "mcp-kaiten": "build/index.js"
   },
   "files": [
-    "dist"
+    "build"
   ],
   "scripts": {
-    "build": "tsc",
-    "test": "node --import tsx --test tests/*.test.ts",
-    "test:integration": "bash tests/integration/run-all.sh",
-    "start": "node dist/index.js",
+    "build": "tsc && chmod 755 build/index.js",
+    "start": "node build/index.js",
     "dev": "tsc --watch",
-    "prepublishOnly": "npm run build"
+    "prepare": "npm run build",
+    "inspector": "npx @modelcontextprotocol/inspector build/index.js",
+    "test": "node --import tsx --test tests/unit/*.test.ts",
+    "test:integration": "bash tests/integration/run-all.sh"
   },
   "keywords": [
     "mcp",

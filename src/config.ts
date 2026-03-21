@@ -28,6 +28,22 @@ const envSchema = z.object({
     .transform((v) => parseInt(v, 10))
     .pipe(z.number().int().min(0))
     .default("300000"),
+  KAITEN_ALLOWED_SPACE_IDS: z
+    .string()
+    .transform((v) =>
+      v.split(",")
+        .map((s) => parseInt(s.trim(), 10))
+        .filter((n) => !isNaN(n)),
+    )
+    .optional(),
+  KAITEN_ALLOWED_BOARD_IDS: z
+    .string()
+    .transform((v) =>
+      v.split(",")
+        .map((s) => parseInt(s.trim(), 10))
+        .filter((n) => !isNaN(n)),
+    )
+    .optional(),
 });
 
 type Config = {
@@ -36,6 +52,8 @@ type Config = {
   defaultSpaceId: number | undefined;
   requestTimeoutMs: number;
   cacheTtlMs: number;
+  allowedSpaceIds: number[] | undefined;
+  allowedBoardIds: number[] | undefined;
 };
 
 let cached: Config | null = null;
@@ -50,10 +68,9 @@ export function getConfig(): Config {
         (i) => `  ${i.path.join(".")}: ${i.message}`,
       )
       .join("\n");
-    console.error(
+    throw new Error(
       `mcp-kaiten config error:\n${messages}`,
     );
-    process.exit(1);
   }
 
   const env = result.data;
@@ -64,6 +81,8 @@ export function getConfig(): Config {
     defaultSpaceId: env.KAITEN_DEFAULT_SPACE_ID,
     requestTimeoutMs: env.KAITEN_REQUEST_TIMEOUT_MS,
     cacheTtlMs: env.KAITEN_CACHE_TTL_MS,
+    allowedSpaceIds: env.KAITEN_ALLOWED_SPACE_IDS,
+    allowedBoardIds: env.KAITEN_ALLOWED_BOARD_IDS,
   };
 
   return cached;
@@ -76,4 +95,28 @@ export function getBaseUrl(): string {
 export function getDefaultSpaceId():
   number | undefined {
   return getConfig().defaultSpaceId;
+}
+
+export function checkSpaceAccess(
+  spaceId: number,
+): void {
+  const allowed = getConfig().allowedSpaceIds;
+  if (allowed && !allowed.includes(spaceId)) {
+    throw new Error(
+      `Space ${spaceId} is not in `
+        + `KAITEN_ALLOWED_SPACE_IDS`,
+    );
+  }
+}
+
+export function checkBoardAccess(
+  boardId: number,
+): void {
+  const allowed = getConfig().allowedBoardIds;
+  if (allowed && !allowed.includes(boardId)) {
+    throw new Error(
+      `Board ${boardId} is not in `
+        + `KAITEN_ALLOWED_BOARD_IDS`,
+    );
+  }
 }

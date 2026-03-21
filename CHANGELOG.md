@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.1.0] - 2026-03-21
+
+### Added
+- **Checklists (5):** create, get, delete checklist; add, update checklist item
+- **Tags (3):** list tags, add tag to card, remove tag from card
+- **Subtasks (3):** list, attach, detach child cards
+- **Files (3):** list, upload (multipart), delete attachments
+- **Custom fields (1):** list custom properties per space
+- Integration tests for all 41 tools (single-card workflow)
+- New test suites: checklists, tags, subtasks, files, custom-fields
+
+### Fixed
+- `kaiten_add_tag` — API requires `name` field, not `tag_id`; now resolves name from tag cache
+- `kaiten_upload_file` — switched from JSON body to multipart/form-data (Kaiten API requirement)
+
+### Changed
+- All tool descriptions now use full `kaiten_*` prefixed names for LLM clarity
+- `state` parameter describes allowed values: `draft|queued|in_progress|done`
+- `forDate` parameter includes ISO 8601 format hint
+- `kaiten_detach_subtask` annotation: `destructiveHint` corrected to `false` (unlink, not delete)
+- `kaiten_upload_file` annotation: `idempotentHint` corrected to `false` (creates duplicates)
+- Resource descriptions expanded with cross-references to related tools
+- Unified verbosity describe format across all tools
+
 ## [1.0.2] - 2026-03-21
 
 ### Fixed

@@ -10,20 +10,29 @@ import {
   simplifySpace, simplifyBoard,
   simplifyColumn, simplifyLane, simplifyList,
   verbositySchema,
-  type Verbosity,
+  asV,
 } from "../utils/simplify.js";
 
 export function registerSpaceTools(
   server: McpServer,
 ): void {
-  server.tool(
+  server.registerTool(
     "kaiten_list_spaces",
-    "List all spaces available to the current "
-    + "user. Use this to discover space IDs for "
-    + "other tools.",
-    { verbosity: verbositySchema },
+    {
+      title: "List Spaces",
+      description:
+        "List spaces visible to current user. Space IDs are "
+        + "used by boards, cards, and custom properties tools.",
+      inputSchema: { verbosity: verbositySchema },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: true,
+        idempotentHint: true,
+      },
+    },
     handleTool(async ({ verbosity }) => {
-      const v = verbosity as Verbosity;
+      const v = asV(verbosity);
       const spaces = await spacesCache.getOrFetch(
         "all", () => get("/spaces"),
       );
@@ -33,18 +42,29 @@ export function registerSpaceTools(
     }),
   );
 
-  server.tool(
+  server.registerTool(
     "kaiten_get_space",
-    "Get space details. Get spaceId from "
-    + "kaiten_list_spaces.",
     {
-      spaceId: z.number().int().describe(
-        "Space ID",
-      ),
-      verbosity: verbositySchema,
+      title: "Get Space",
+      description:
+        "Fetch one space by ID. Use after "
+        + "kaiten_list_spaces when the list view is "
+        + "not enough before drilling into boards.",
+      inputSchema: {
+        spaceId: z.number().int().describe(
+          "Space ID",
+        ),
+        verbosity: verbositySchema,
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: true,
+        idempotentHint: true,
+      },
     },
     handleTool(async ({ spaceId, verbosity }) => {
-      const v = verbosity as Verbosity;
+      const v = asV(verbosity);
       const space = await spacesCache.getOrFetch(
         `space:${spaceId}`,
         () => get<Obj>(`/spaces/${spaceId}`),
@@ -53,18 +73,29 @@ export function registerSpaceTools(
     }),
   );
 
-  server.tool(
+  server.registerTool(
     "kaiten_list_boards",
-    "List all boards in a space. Use this to "
-    + "discover board IDs for card operations.",
     {
-      spaceId: z.number().int().describe(
-        "Space ID",
-      ),
-      verbosity: verbositySchema,
+      title: "List Boards",
+      description:
+        "List boards in a space. boardId for columns, "
+        + "kaiten_get_board_cards, kaiten_search_cards, "
+        + "kaiten_create_card.",
+      inputSchema: {
+        spaceId: z.number().int().describe(
+          "Space ID",
+        ),
+        verbosity: verbositySchema,
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: true,
+        idempotentHint: true,
+      },
     },
     handleTool(async ({ spaceId, verbosity }) => {
-      const v = verbosity as Verbosity;
+      const v = asV(verbosity);
       const boards = await boardsCache.getOrFetch(
         `space:${spaceId}:boards`,
         () => get(`/spaces/${spaceId}/boards`),
@@ -75,18 +106,28 @@ export function registerSpaceTools(
     }),
   );
 
-  server.tool(
+  server.registerTool(
     "kaiten_get_board",
-    "Get board details: title, columns, lanes. "
-    + "Get boardId from kaiten_list_boards.",
     {
-      boardId: z.number().int().describe(
-        "Board ID",
-      ),
-      verbosity: verbositySchema,
+      title: "Get Board",
+      description:
+        "Get board metadata. Column IDs: kaiten_list_columns. "
+        + "boardId from kaiten_list_boards.",
+      inputSchema: {
+        boardId: z.number().int().describe(
+          "Board ID",
+        ),
+        verbosity: verbositySchema,
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: true,
+        idempotentHint: true,
+      },
     },
     handleTool(async ({ boardId, verbosity }) => {
-      const v = verbosity as Verbosity;
+      const v = asV(verbosity);
       const board = await boardsCache.getOrFetch(
         `board:${boardId}`,
         () => get<Obj>(`/boards/${boardId}`),
@@ -95,19 +136,29 @@ export function registerSpaceTools(
     }),
   );
 
-  server.tool(
+  server.registerTool(
     "kaiten_list_columns",
-    "List columns of a board. Columns represent "
-    + "card statuses (e.g. To Do, In Progress, "
-    + "Done). Needed for kaiten_create_card.",
     {
-      boardId: z.number().int().describe(
-        "Board ID",
-      ),
-      verbosity: verbositySchema,
+      title: "List Columns",
+      description:
+        "Board columns (statuses). columnId for "
+        + "kaiten_create_card, kaiten_update_card. boardId "
+        + "from kaiten_list_boards.",
+      inputSchema: {
+        boardId: z.number().int().describe(
+          "Board ID",
+        ),
+        verbosity: verbositySchema,
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: true,
+        idempotentHint: true,
+      },
     },
     handleTool(async ({ boardId, verbosity }) => {
-      const v = verbosity as Verbosity;
+      const v = asV(verbosity);
       const columns = await boardsCache.getOrFetch(
         `board:${boardId}:columns`,
         () => get(`/boards/${boardId}/columns`),
@@ -118,18 +169,29 @@ export function registerSpaceTools(
     }),
   );
 
-  server.tool(
+  server.registerTool(
     "kaiten_list_lanes",
-    "List swimlanes of a board. Use laneId in "
-    + "kaiten_create_card or kaiten_update_card.",
     {
-      boardId: z.number().int().describe(
-        "Board ID",
-      ),
-      verbosity: verbositySchema,
+      title: "List Lanes",
+      description:
+        "Swimlanes for a board. Optional laneId on "
+        + "kaiten_create_card and kaiten_update_card "
+        + "when the board uses lanes.",
+      inputSchema: {
+        boardId: z.number().int().describe(
+          "Board ID",
+        ),
+        verbosity: verbositySchema,
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: true,
+        idempotentHint: true,
+      },
     },
     handleTool(async ({ boardId, verbosity }) => {
-      const v = verbosity as Verbosity;
+      const v = asV(verbosity);
       const lanes = await boardsCache.getOrFetch(
         `board:${boardId}:lanes`,
         () => get(`/boards/${boardId}/lanes`),
@@ -140,17 +202,25 @@ export function registerSpaceTools(
     }),
   );
 
-  server.tool(
+  server.registerTool(
     "kaiten_list_card_types",
-    "List all card types in the workspace (e.g. "
-    + "Bug, Feature, Task). Global endpoint, "
-    + "not board-specific. Use typeId in "
-    + "kaiten_create_card.",
     {
-      verbosity: verbositySchema,
+      title: "List Card Types",
+      description:
+        "Workspace card types (Bug, Story, etc.). typeId in "
+        + "kaiten_create_card or kaiten_update_card.",
+      inputSchema: {
+        verbosity: verbositySchema,
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: true,
+        idempotentHint: true,
+      },
     },
     handleTool(async ({ verbosity }) => {
-      const v = verbosity as Verbosity;
+      const v = asV(verbosity);
       const types = await boardsCache.getOrFetch(
         "global:card-types",
         () => get<Obj[]>("/card-types"),

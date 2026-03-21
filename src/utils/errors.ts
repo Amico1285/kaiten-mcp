@@ -1,5 +1,8 @@
 const MAX_RESPONSE_LENGTH = 100_000;
 
+const PRETTY_JSON =
+  process.env.MCP_PRETTY_JSON === "true";
+
 function truncateResponse(text: string): string {
   if (text.length <= MAX_RESPONSE_LENGTH) return text;
 
@@ -20,7 +23,9 @@ type ErrorResult = ToolResult & { isError: true };
 export function jsonResult(
   data: unknown,
 ): ToolResult {
-  const text = JSON.stringify(data, null, 2);
+  const text = PRETTY_JSON
+    ? JSON.stringify(data, null, 2)
+    : JSON.stringify(data);
   return {
     content: [{
       type: "text",

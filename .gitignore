@@ -1,6 +1,7 @@
 node_modules/
-dist/
+build/
 *.js.map
 .env
-tests/integration/
 .DS_Store
+TODO.md
+tests/

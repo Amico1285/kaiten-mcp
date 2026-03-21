@@ -5,16 +5,14 @@ import type { Obj } from "./schemas.js";
 
 export type Verbosity = "raw" | "min" | "normal" | "max";
 
+export function asV(verbosity: string): Verbosity {
+  return verbosity as Verbosity;
+}
+
 export const verbositySchema = z
   .enum(["raw", "min", "normal", "max"])
   .default("min")
-  .describe(
-    "Response detail level: "
-    + "raw=full API response, "
-    + "min=compact (default, saves context), "
-    + "normal=useful fields, "
-    + "max=normal + description/HTML",
-  );
+  .describe("Detail: raw|min(default)|normal|max");
 
 type SimplifyFns = {
   min: (o: Obj) => Obj;
@@ -98,6 +96,11 @@ const cardFns: SimplifyFns = {
   max: (c) => ({
     ...cardFns.normal(c),
     description: c.description ?? null,
+    children: Array.isArray(c.children)
+      ? (c.children as Obj[]).map(
+        (ch) => cardFns.min(ch),
+      )
+      : [],
     checklists: c.checklists ?? [],
     blockers: c.blockers ?? [],
     external_links: c.external_links ?? [],

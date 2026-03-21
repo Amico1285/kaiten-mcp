@@ -14,6 +14,12 @@ import { registerCommentTools } from "./tools/comments.js";
 import { registerTimelogTools } from "./tools/timelogs.js";
 import { registerSpaceTools } from "./tools/spaces.js";
 import { registerUserTools } from "./tools/users.js";
+import { registerSubtaskTools } from "./tools/subtasks.js";
+import { registerTagTools } from "./tools/tags.js";
+import { registerChecklistTools } from "./tools/checklists.js";
+import { registerFileTools } from "./tools/files.js";
+import { registerCustomFieldTools } from "./tools/customFields.js";
+import { registerResources, registerPrompts } from "./resources.js";
 
 const server = new McpServer(
   {
@@ -22,6 +28,9 @@ const server = new McpServer(
   },
   {
     capabilities: {
+      tools: { listChanged: true },
+      resources: { listChanged: true },
+      prompts: { listChanged: true },
       logging: {},
     },
   },
@@ -32,6 +41,13 @@ registerCommentTools(server);
 registerTimelogTools(server);
 registerSpaceTools(server);
 registerUserTools(server);
+registerSubtaskTools(server);
+registerTagTools(server);
+registerChecklistTools(server);
+registerFileTools(server);
+registerCustomFieldTools(server);
+registerResources(server);
+registerPrompts(server);
 
 async function main(): Promise<void> {
   const transport = new StdioServerTransport();
