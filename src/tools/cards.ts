@@ -13,10 +13,50 @@ import {
 } from "../utils/schemas.js";
 import {
   simplifyCard, simplifyList,
+  simplifyUser,
   verbositySchema,
   asV,
+  type Verbosity,
 } from "../utils/simplify.js";
 import { buildSearchQuery } from "../utils/queryBuilder.js";
+
+// Inline simplify helper for the location-history endpoint
+// (same pattern as blockers.ts — keeps src/utils/simplify.ts
+// untouched). CRITICAL: the live probe on 2026-04-08 showed
+// that `id` on this endpoint is a STRING (e.g.
+// "528420192"), not a number — unique among Kaiten list
+// endpoints. Leave it as-is; converting to Number would
+// lose precision for large ids (>2^53).
+function simplifyLocationHistory(
+  h: Obj, v: Verbosity,
+): Obj {
+  if (v === "raw") return h;
+  const author = (h.author && typeof h.author === "object")
+    ? h.author as Obj
+    : undefined;
+  const min: Obj = {
+    id: h.id, // string, not number — do NOT convert
+    board_id: h.board_id,
+    column_id: h.column_id,
+    lane_id: h.lane_id,
+    changed: h.changed,
+    condition: h.condition,
+  };
+  if (v === "min") return min;
+  const normal: Obj = {
+    ...min,
+    subcolumn_id: h.subcolumn_id ?? null,
+    sprint_id: h.sprint_id ?? null,
+    author_id: h.author_id,
+    author_name: author?.full_name ?? null,
+  };
+  if (v === "normal") return normal;
+  return {
+    ...normal,
+    card_id: h.card_id,
+    author: author ? simplifyUser(author, "max") : null,
+  };
+}
 
 export function registerCardTools(
   server: McpServer,
@@ -522,6 +562,48 @@ export function registerCardTools(
       await del(`/cards/${cardId}`);
       return textResult(
         `Card ${cardId} deleted`,
+      );
+    }),
+  );
+
+  server.registerTool(
+    "kaiten_get_card_location_history",
+    {
+      title: "Get Card Location History",
+      description:
+        "Get the card movement history — every time the "
+        + "card was moved between boards, columns, lanes, "
+        + "or sprints, with a timestamp and the author who "
+        + "performed the move. Useful for audit ('who moved "
+        + "this card and when') and cycle-time analytics "
+        + "('how long did this card sit in each column'). "
+        + "Sorted newest-first by `changed`. NOTE: unlike "
+        + "most Kaiten endpoints the history `id` field is "
+        + "a STRING (not an integer) — treat it as an "
+        + "opaque identifier. condition: 1=Active, "
+        + "2=Archived, 3=Deleted. cardId from "
+        + "kaiten_get_card or kaiten_search_cards.",
+      inputSchema: {
+        cardId: positiveId(
+          "Card ID (from kaiten_search_cards or "
+          + "kaiten_get_card)",
+        ),
+        verbosity: verbositySchema,
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: true,
+        idempotentHint: true,
+      },
+    },
+    handleTool(async ({ cardId, verbosity }) => {
+      const v = asV(verbosity);
+      const history = await get<Obj[]>(
+        `/cards/${cardId}/location-history`,
+      );
+      return jsonResult(
+        history.map((h) => simplifyLocationHistory(h, v)),
       );
     }),
   );

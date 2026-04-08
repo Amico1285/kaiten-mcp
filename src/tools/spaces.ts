@@ -185,6 +185,44 @@ export function registerSpaceTools(
   );
 
   server.registerTool(
+    "kaiten_list_subcolumns",
+    {
+      title: "List Subcolumns",
+      description:
+        "List subcolumns of a parent column. Subcolumns "
+        + "split a column into vertical lanes "
+        + "(e.g. 'In Progress' → 'Implementation' / "
+        + "'Review'). Each subcolumn has `column_id` set "
+        + "to the parent at verbosity=max. Returns "
+        + "standard column shape via simplifyColumn. Empty "
+        + "array if the column has no subcolumns — most "
+        + "boards don't use them. columnId from "
+        + "kaiten_list_columns.",
+      inputSchema: {
+        columnId: positiveId(
+          "Parent column ID (from kaiten_list_columns)",
+        ),
+        verbosity: verbositySchema,
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: true,
+        idempotentHint: true,
+      },
+    },
+    handleTool(async ({ columnId, verbosity }) => {
+      const v = asV(verbosity);
+      const subs = await get<Obj[]>(
+        `/columns/${columnId}/subcolumns`,
+      );
+      return jsonResult(
+        subs.map((c) => simplifyColumn(c, v)),
+      );
+    }),
+  );
+
+  server.registerTool(
     "kaiten_list_lanes",
     {
       title: "List Lanes",

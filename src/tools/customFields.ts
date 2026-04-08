@@ -3,7 +3,7 @@ import { get } from "../client.js";
 import {
   jsonResult, handleTool,
 } from "../utils/errors.js";
-import type { Obj } from "../utils/schemas.js";
+import { type Obj, positiveId } from "../utils/schemas.js";
 import {
   asV,
   verbositySchema,
@@ -32,6 +32,28 @@ function simplifyProperty(
     result.fields_settings = p.fields_settings ?? null;
   }
   return result;
+}
+
+// Shape from docs/api/custom-property-select-values/
+// get-list-of-select-values.md. Not live-verified
+// (test workspace has no custom properties at all), but
+// the endpoint is documented stable.
+function simplifySelectValue(sv: Obj, v: Verbosity): Obj {
+  if (v === "raw") return sv;
+  const min: Obj = {
+    id: sv.id,
+    value: sv.value,
+    color: sv.color ?? null,
+  };
+  if (v === "min") return min;
+  return {
+    ...min,
+    custom_property_id: sv.custom_property_id,
+    condition: sv.condition,
+    sort_order: sv.sort_order,
+    external_id: sv.external_id ?? null,
+    updated: sv.updated,
+  };
 }
 
 export function registerCustomFieldTools(
@@ -72,6 +94,51 @@ export function registerCustomFieldTools(
         (props as Obj[]).map(
           (p) => simplifyProperty(p, v),
         ),
+      );
+    }),
+  );
+
+  server.registerTool(
+    "kaiten_list_custom_property_select_values",
+    {
+      title: "List Custom Property Select Values",
+      description:
+        "Get the valid select / multi_select values for "
+        + "a custom property. Use this BEFORE writing the "
+        + "`properties` map via kaiten_update_card for any "
+        + "select / multi_select field — passing arbitrary "
+        + "integers will either fail or silently misassign. "
+        + "propertyId comes from kaiten_list_custom_"
+        + "properties (filter results by type='select' or "
+        + "type='multi_select'). Returns id, value (the "
+        + "display label), color, sort_order, condition. "
+        + "IMPORTANT: if the property exists but is not a "
+        + "select-type, the endpoint returns an empty array "
+        + "(not 400), so check the property type first. "
+        + "404 means the propertyId is not in your company.",
+      inputSchema: {
+        propertyId: positiveId(
+          "Custom property ID (from "
+          + "kaiten_list_custom_properties; only "
+          + "select/multi_select types have values)",
+        ),
+        verbosity: verbositySchema,
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: true,
+        idempotentHint: true,
+      },
+    },
+    handleTool(async ({ propertyId, verbosity }) => {
+      const v = asV(verbosity);
+      const values = await get<Obj[]>(
+        `/company/custom-properties/${propertyId}`
+        + `/select-values`,
+      );
+      return jsonResult(
+        values.map((sv) => simplifySelectValue(sv, v)),
       );
     }),
   );
