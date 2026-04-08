@@ -4,7 +4,10 @@ import { get, post, patch, del } from "../client.js";
 import {
   jsonResult, textResult, handleTool,
 } from "../utils/errors.js";
-import type { Obj } from "../utils/schemas.js";
+import {
+  type Obj, positiveId, buildOptionalBody,
+  requireSomeFields,
+} from "../utils/schemas.js";
 import { usersCache } from "../utils/cache.js";
 import {
   simplifyComment, simplifyList,
@@ -32,11 +35,17 @@ export function registerCommentTools(
     {
       title: "List Card Comments",
       description:
-        "Comments. commentId for kaiten_update_comment/"
-        + "kaiten_delete_comment; cardId from "
-        + "kaiten_search_cards/kaiten_get_card.",
+        "List all comments on a card. Each comment exposes its "
+        + "`id` — pass it as `commentId` to "
+        + "kaiten_update_comment or kaiten_delete_comment. "
+        + "Resolve cardId via kaiten_search_cards or "
+        + "kaiten_get_card. Returns: array of comments "
+        + "(simplified per verbosity).",
       inputSchema: {
-        cardId: z.coerce.number().int().describe("Card ID"),
+        cardId: positiveId(
+          "Card ID (from kaiten_search_cards or "
+          + "kaiten_get_card)",
+        ),
         verbosity: verbositySchema,
       },
       annotations: {
@@ -62,10 +71,17 @@ export function registerCommentTools(
     {
       title: "Create Comment",
       description:
-        "Add HTML comment. cardId from kaiten_search_cards "
-        + "or kaiten_get_card; list: kaiten_get_card_comments.",
+        "Add an HTML comment to a card. Resolve cardId via "
+        + "kaiten_search_cards or kaiten_get_card; list "
+        + "existing comments via kaiten_get_card_comments. "
+        + "Returns: the created comment object (including its "
+        + "`id`, needed for kaiten_update_comment / "
+        + "kaiten_delete_comment).",
       inputSchema: {
-        cardId: z.coerce.number().int().describe("Card ID"),
+        cardId: positiveId(
+          "Card ID (from kaiten_search_cards or "
+          + "kaiten_get_card)",
+        ),
         text: z.string().describe("HTML comment"),
         verbosity: verbositySchema,
       },
@@ -99,32 +115,45 @@ export function registerCommentTools(
     {
       title: "Update Comment",
       description:
-        "Replace comment HTML. commentId from "
-        + "kaiten_get_card_comments; cardId must match.",
+        "Replace the HTML body of an existing comment. "
+        + "Resolve commentId via kaiten_get_card_comments. "
+        + "The cardId is part of the URL path — both cardId "
+        + "and commentId must reference the actual "
+        + "card-comment pair (mismatched pair returns 500 "
+        + "from Kaiten). Returns: the updated comment object.",
       inputSchema: {
-        cardId: z.coerce.number().int().describe("Card ID"),
-        commentId: z.coerce.number().int().describe(
-          "Comment ID",
+        cardId: positiveId(
+          "Card ID the comment belongs to (from "
+          + "kaiten_get_card_comments)",
         ),
-        text: z.string().describe("New HTML"),
+        commentId: positiveId(
+          "Comment ID (from kaiten_get_card_comments)",
+        ),
+        text: z.string().optional().describe("New HTML body"),
         verbosity: verbositySchema,
       },
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
         openWorldHint: true,
-        idempotentHint: false,
+        idempotentHint: true,
       },
     },
     handleTool(async ({
       cardId, commentId, text, verbosity,
     }) => {
       const v = asV(verbosity);
+      const body = buildOptionalBody([
+        ["text", text],
+      ]);
+
+      requireSomeFields(body, "kaiten_update_comment", ["text"]);
+
       const [currentUser, comment] = await Promise.all([
         fetchCurrentUser(),
         patch<Obj>(
           `/cards/${cardId}/comments/${commentId}`,
-          { text },
+          body,
         ),
       ]);
       return jsonResult(
@@ -143,9 +172,12 @@ export function registerCommentTools(
         "Delete comment. commentId and cardId from "
         + "kaiten_get_card_comments.",
       inputSchema: {
-        cardId: z.coerce.number().int().describe("Card ID"),
-        commentId: z.coerce.number().int().describe(
-          "Comment ID",
+        cardId: positiveId(
+          "Card ID the comment belongs to (from "
+          + "kaiten_get_card_comments)",
+        ),
+        commentId: positiveId(
+          "Comment ID (from kaiten_get_card_comments)",
         ),
       },
       annotations: {

@@ -8,6 +8,8 @@ import {
   type Obj, optionalInt, paginationSchema,
   conditionSchema, buildOptionalBody,
   boolish, boolishWithDefault, removedField,
+  positiveId, optionalPositiveId,
+  optionalIsoDateTime, requireSomeFields,
 } from "../utils/schemas.js";
 import {
   simplifyCard, simplifyList,
@@ -24,11 +26,17 @@ export function registerCardTools(
     {
       title: "Get Card",
       description:
-        "Get card by ID. verbosity=max; includeChildren for "
-        + "child cards. ID from kaiten_search_cards or "
-        + "kaiten_get_board_cards.",
+        "Get a single card by ID. Use verbosity=max for full "
+        + "detail (default is min, which returns 9 core fields). "
+        + "Set includeChildren=true to also fetch child cards. "
+        + "Resolve cardId via kaiten_search_cards or "
+        + "kaiten_get_board_cards. Returns: a single card object "
+        + "(simplified per verbosity).",
       inputSchema: {
-        cardId: z.coerce.number().int().describe("Card ID"),
+        cardId: positiveId(
+          "Card ID (from kaiten_search_cards or "
+          + "kaiten_get_board_cards)",
+        ),
         includeChildren: boolishWithDefault(false)
           .describe("Also fetch child cards"),
         verbosity: verbositySchema,
@@ -70,22 +78,36 @@ export function registerCardTools(
       title: "Search Cards",
       description:
         "Search cards with filters and pagination. Pass boardId "
-        + "or spaceId to limit scope. Use kaiten_get_card for "
-        + "details.",
+        + "(from kaiten_list_boards) or spaceId (from "
+        + "kaiten_list_spaces) to limit scope. The `query` "
+        + "parameter performs a substring match against card "
+        + "titles (server searches the `title` field only). "
+        + "The `condition` parameter is a magic number: 1=active "
+        + "(default), 2=archived only, 3=all (both). Use "
+        + "kaiten_get_card for full detail on a specific card. "
+        + "Returns: array of cards (simplified per verbosity).",
       inputSchema: {
       query: z.string().optional().describe(
-        "Search query",
+        "Substring match against card titles",
       ),
-      boardId: optionalInt("Filter by board ID"),
-      spaceId: optionalInt(
-        "Filter by space ID "
-        + "(uses KAITEN_DEFAULT_SPACE_ID if omitted)",
+      boardId: optionalPositiveId(
+        "Filter by board ID (from kaiten_list_boards)",
       ),
-      columnId: optionalInt("Filter by column ID"),
-      laneId: optionalInt("Filter by lane ID"),
-      ownerId: optionalInt("Filter by owner ID"),
-      typeId: optionalInt(
-        "Filter by card type ID",
+      spaceId: optionalPositiveId(
+        "Filter by space ID (from kaiten_list_spaces; "
+        + "uses KAITEN_DEFAULT_SPACE_ID if omitted)",
+      ),
+      columnId: optionalPositiveId(
+        "Filter by column ID (from kaiten_list_columns)",
+      ),
+      laneId: optionalPositiveId(
+        "Filter by lane ID (from kaiten_list_lanes)",
+      ),
+      ownerId: optionalPositiveId(
+        "Filter by owner user ID (from kaiten_list_users)",
+      ),
+      typeId: optionalPositiveId(
+        "Filter by card type ID (from kaiten_list_card_types)",
       ),
       state: optionalInt(
         "Card state: draft|queued|in_progress|done",
@@ -103,23 +125,29 @@ export function registerCardTools(
       withDueDate: boolish.optional().describe(
         "Filter cards with due date",
       ),
-      createdBefore: z.string().optional().describe(
-        "Created before (ISO 8601)",
+      createdBefore: optionalIsoDateTime(
+        "Cards created before this ISO 8601 timestamp "
+        + "(YYYY-MM-DD or full datetime)",
       ),
-      createdAfter: z.string().optional().describe(
-        "Created after (ISO 8601)",
+      createdAfter: optionalIsoDateTime(
+        "Cards created after this ISO 8601 timestamp "
+        + "(YYYY-MM-DD or full datetime)",
       ),
-      updatedBefore: z.string().optional().describe(
-        "Updated before (ISO 8601)",
+      updatedBefore: optionalIsoDateTime(
+        "Cards last updated before this ISO 8601 timestamp "
+        + "(YYYY-MM-DD or full datetime)",
       ),
-      updatedAfter: z.string().optional().describe(
-        "Updated after (ISO 8601)",
+      updatedAfter: optionalIsoDateTime(
+        "Cards last updated after this ISO 8601 timestamp "
+        + "(YYYY-MM-DD or full datetime)",
       ),
-      dueDateBefore: z.string().optional().describe(
-        "Due date before (ISO 8601)",
+      dueDateBefore: optionalIsoDateTime(
+        "Cards with due date before this ISO 8601 timestamp "
+        + "(YYYY-MM-DD or full datetime)",
       ),
-      dueDateAfter: z.string().optional().describe(
-        "Due date after (ISO 8601)",
+      dueDateAfter: optionalIsoDateTime(
+        "Cards with due date after this ISO 8601 timestamp "
+        + "(YYYY-MM-DD or full datetime)",
       ),
       ownerIds: z.string().optional().describe(
         "Comma-separated owner IDs",
@@ -198,7 +226,9 @@ export function registerCardTools(
         "Recent cards in a space (newest first, no filters). "
         + "For filtered search use kaiten_search_cards.",
       inputSchema: {
-        spaceId: z.coerce.number().int().describe("Space ID"),
+        spaceId: positiveId(
+          "Space ID (from kaiten_list_spaces)",
+        ),
         condition: conditionSchema,
         ...paginationSchema,
         verbosity: verbositySchema,
@@ -226,7 +256,9 @@ export function registerCardTools(
         "Recent cards on a board (newest first, no filters). "
         + "For filtered search use kaiten_search_cards.",
       inputSchema: {
-        boardId: z.coerce.number().int().describe("Board ID"),
+        boardId: positiveId(
+          "Board ID (from kaiten_list_boards)",
+        ),
         condition: conditionSchema,
         ...paginationSchema,
         verbosity: verbositySchema,
@@ -251,23 +283,35 @@ export function registerCardTools(
     {
       title: "Create Card",
       description:
-        "Create card. Requires boardId + columnId from "
-        + "kaiten_list_columns. Optional: laneId, typeId, "
-        + "sizeText. ownerId must be a positive integer "
-        + "(Kaiten requires every card to have an owner).",
+        "Create card. Requires boardId (from kaiten_list_boards) "
+        + "and columnId (from kaiten_list_columns). Optional: "
+        + "laneId (kaiten_list_lanes), typeId "
+        + "(kaiten_list_card_types), sizeText. ownerId must be a "
+        + "positive integer (Kaiten requires every card to have "
+        + "an owner). "
+        + "NOTE: response in min/normal verbosity may show "
+        + "`board_title:null` and `column_title:null` because "
+        + "POST /cards returns a flat payload. Re-fetch via "
+        + "kaiten_get_card to populate, or use verbosity=raw.",
       inputSchema: {
-      boardId: z.coerce.number().int().describe("Board ID"),
-      columnId: z.coerce.number().int().describe(
-        "Column ID",
+      boardId: positiveId(
+        "Board ID (from kaiten_list_boards)",
+      ),
+      columnId: positiveId(
+        "Column ID (from kaiten_list_columns)",
       ),
       title: z.string().min(1).max(500).describe(
         "Card title",
       ),
-      laneId: optionalInt("Lane ID"),
+      laneId: optionalPositiveId(
+        "Lane ID (from kaiten_list_lanes)",
+      ),
       description: z.string().optional().describe(
         "Card description (HTML)",
       ),
-      typeId: optionalInt("Card type ID"),
+      typeId: optionalPositiveId(
+        "Card type ID (from kaiten_list_card_types)",
+      ),
       sortOrder: optionalInt(
         "Sort order in column",
       ),
@@ -282,13 +326,12 @@ export function registerCardTools(
       asap: boolish.optional().describe(
         "Mark as urgent",
       ),
-      ownerId: z.coerce.number().int().positive().optional()
-        .describe(
-          "Owner user ID (must be a positive integer). "
-          + "Defaults to API caller if omitted.",
-        ),
-      dueDate: z.string().optional().describe(
-        "Due date (ISO 8601)",
+      ownerId: optionalPositiveId(
+        "Owner user ID (must be a positive integer). "
+        + "Defaults to API caller if omitted.",
+      ),
+      dueDate: optionalIsoDateTime(
+        "Due date in ISO 8601 (YYYY-MM-DD or full datetime)",
       ),
       verbosity: verbositySchema,
       },
@@ -335,19 +378,37 @@ export function registerCardTools(
         + "the card via columnId (Kaiten state is computed "
         + "from column.type, not settable directly). "
         + "To change size — use sizeText (the numeric size "
-        + "field on a card is read-only).",
+        + "field on a card is read-only). "
+        + "Set custom property values via the `properties` map "
+        + "(see kaiten_list_custom_properties for IDs and "
+        + "types). "
+        + "NOTE: response in min/normal verbosity may show "
+        + "`board_title:null` and `column_title:null` because "
+        + "PATCH /cards/{id} returns a flat payload. Re-fetch "
+        + "via kaiten_get_card to populate, or use "
+        + "verbosity=raw.",
       inputSchema: {
-      cardId: z.coerce.number().int().describe("Card ID"),
+      cardId: positiveId(
+        "Card ID (from kaiten_search_cards or kaiten_get_card)",
+      ),
       title: z.string().optional().describe(
         "New title",
       ),
       description: z.string().optional().describe(
         "New description (HTML)",
       ),
-      columnId: optionalInt("Move to column ID"),
-      laneId: optionalInt("Move to lane ID"),
-      boardId: optionalInt("Move to board ID"),
-      typeId: optionalInt("Change card type ID"),
+      columnId: optionalPositiveId(
+        "Move to column ID (from kaiten_list_columns)",
+      ),
+      laneId: optionalPositiveId(
+        "Move to lane ID (from kaiten_list_lanes)",
+      ),
+      boardId: optionalPositiveId(
+        "Move to board ID (from kaiten_list_boards)",
+      ),
+      typeId: optionalPositiveId(
+        "Change card type ID (from kaiten_list_card_types)",
+      ),
       sizeText: z.union([z.string(), z.coerce.number()])
         .optional()
         .describe(
@@ -373,22 +434,32 @@ export function registerCardTools(
       asap: boolish.optional().describe(
         "Mark as urgent",
       ),
-      ownerId: z.coerce.number().int().positive().optional()
-        .describe(
-          "Reassign owner to user ID (must be a positive "
-          + "integer). Kaiten requires every card to have "
-          + "an owner — cannot be unset, only reassigned.",
-        ),
-      dueDate: z.string().optional().describe(
-        "Due date (ISO 8601)",
+      ownerId: optionalPositiveId(
+        "Reassign owner to user ID (must be a positive "
+        + "integer). Kaiten requires every card to have "
+        + "an owner — cannot be unset, only reassigned.",
       ),
+      dueDate: optionalIsoDateTime(
+        "Due date in ISO 8601 (YYYY-MM-DD or full datetime)",
+      ),
+      properties: z.record(z.string(), z.unknown()).optional()
+        .describe(
+          "Map of custom property values keyed 'id_{propertyId}'. "
+          + "Use kaiten_list_custom_properties to find property "
+          + "IDs and their `type` (which determines the value "
+          + "shape: string, number, date, select id, "
+          + "multi_select ids[], user id, catalog uid, tree "
+          + "uid, etc.). Pass null as a value to clear a "
+          + "property. Example: "
+          + "{\"id_574845\": \"my-value\", \"id_574850\": null}",
+        ),
       verbosity: verbositySchema,
       },
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
         openWorldHint: true,
-        idempotentHint: false,
+        idempotentHint: true,
       },
     },
     handleTool(async ({
@@ -406,21 +477,14 @@ export function registerCardTools(
         ["asap", fields.asap],
         ["owner_id", fields.ownerId],
         ["due_date", fields.dueDate],
+        ["properties", fields.properties],
       ]);
 
-      // Empty PATCH on /cards/{id} returns 403 from Kaiten —
-      // not actionable for the caller. Block it early with a
-      // hint that lists which fields actually do something.
-      if (Object.keys(body).length === 0) {
-        throw new Error(
-          "kaiten_update_card requires at least one field "
-          + "to update. Available fields: title, description, "
-          + "columnId, laneId, boardId, typeId, sizeText, "
-          + "asap, ownerId, dueDate. Note: 'size' is "
-          + "read-only (use sizeText), and 'state' is "
-          + "computed from column.type (move via columnId).",
-        );
-      }
+      requireSomeFields(body, "kaiten_update_card", [
+        "title", "description", "columnId", "laneId",
+        "boardId", "typeId", "sizeText", "asap",
+        "ownerId", "dueDate", "properties",
+      ]);
 
       const card = await patch<Obj>(
         `/cards/${cardId}`, body,
@@ -436,9 +500,16 @@ export function registerCardTools(
       description:
         "Permanently delete a card (cannot be undone). "
         + "Resolve cardId via kaiten_search_cards or "
-        + "kaiten_get_card.",
+        + "kaiten_get_card. "
+        + "NOTE: cards with logged time cannot be deleted "
+        + "(Kaiten returns 400 'Card removing with logged time "
+        + "not allowed'). Delete the timelogs first via "
+        + "kaiten_delete_timelog.",
       inputSchema: {
-        cardId: z.coerce.number().int().describe("Card ID"),
+        cardId: positiveId(
+          "Card ID (from kaiten_search_cards or "
+          + "kaiten_get_card)",
+        ),
       },
       annotations: {
         readOnlyHint: false,
