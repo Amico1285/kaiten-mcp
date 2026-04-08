@@ -1,6 +1,6 @@
 {
   "name": "kaiten-mcp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "description": "MCP server for Kaiten — 63 tools across cards, comments, checklists, time-tracking, members, blockers, sprints, custom properties, external links, file uploads, location history, and global timesheet. Forked from iamtemazhe/mcp-kaiten with extensive Wave 1-5 fixes.",
   "author": "Amico1285 (https://github.com/Amico1285)",

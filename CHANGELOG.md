@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.1] - 2026-04-08 — serverInfo identity fix
+
+### Fixed
+
+- `src/index.ts`: the `McpServer` instance was hardcoded with `name: "mcp-kaiten"` and `version: "1.0.2"` (leftover from upstream). MCP clients log this in `serverInfo` during the initialize handshake, so the published `kaiten-mcp@0.1.0` was reporting itself as `mcp-kaiten 1.0.2` to clients. Corrected to `name: "kaiten-mcp"` and `version: "0.1.1"`.
+
+No other code changes — same 63 tools, same behavior, just the identity string the server sends in its handshake response.
+
 ## [0.1.0] - 2026-04-08 — Initial release as `kaiten-mcp`
 
 First release of the fork on npm under the name `kaiten-mcp`. Forked from [iamtemazhe/mcp-kaiten](https://github.com/iamtemazhe/mcp-kaiten) at v1.1.0. Versioning starts fresh from `0.1.0` to signal that this is an independent codebase, not a drop-in replacement of upstream.
