@@ -1,5 +1,49 @@
 # Changelog
 
+## [0.1.2] - 2026-04-08 — dogfooding round: textFormat, URL fix, hint polish
+
+Fixes found by running the published `kaiten-mcp@0.1.1` end-to-end as a real student would: the test session created a card via MCP, opened it in the Kaiten browser UI, and visually verified every operation. Three real bugs surfaced.
+
+### Fixed
+
+#### `description` and comment HTML showed up as literal angle brackets in the UI
+
+Root cause: Kaiten's UI renders `description` and comment bodies as **markdown by default**. When the LLM sent HTML (the previous tool description literally said "Card description (HTML)"), Kaiten stored it verbatim and the UI rendered the angle brackets as plain text.
+
+Verified live with 5 curl probes against `37controlseeing.kaiten.ru`:
+- pure markdown without `text_format_type_id` → renders correctly
+- HTML without `text_format_type_id` → broken (literal text in UI)
+- HTML with `text_format_type_id: 2` → Kaiten parses HTML, normalizes to markdown for storage, UI renders correctly
+- comment HTML with undocumented `type: 2` in request body → works (Kaiten accepts the field even though `docs/api/card-comments/add-comment.md` doesn't list it)
+- comment HTML without `type` → broken
+
+Fix:
+- New `textFormat` enum parameter on `kaiten_create_card`, `kaiten_update_card`, `kaiten_create_comment`, `kaiten_update_comment` (`'markdown' | 'html' | 'jira_wiki'` for cards; `'markdown' | 'html'` for comments).
+- Maps to `text_format_type_id` (cards) or `type` (comments) in the API request body.
+- New shared helpers `textFormatCard` / `textFormatComment` and `textFormatCardId` / `textFormatCommentId` in `src/utils/schemas.ts`.
+- `description` and `text` field descriptions rewritten — no more lying "(HTML)" labels. Now they say "Markdown by default — pass `textFormat: 'html'` if you're sending HTML."
+- `update_card` / `update_comment` `requireSomeFields` checks now ignore a lone `textFormat` so passing it without the actual `description` / `text` doesn't pass the empty-body guard.
+
+#### `url` field on every simplified card was `https://<host>/space//card/<id>` (double-slash)
+
+Root cause: `simplifyCard.cardUrl()` constructed the URL from `card.space_id`, which Kaiten's `GET /cards/{id}` response **does not include** (verified `docs/api/cards/retrieve-card.md`). The `?? ""` fallback produced `/space//card/<id>` for every card, every list, every response — for the entire 0.1.0 + 0.1.1 lifetime.
+
+Fix: use the short form `${baseUrl}/${card.id}`. Kaiten redirects it server-side to the canonical `/space/<space_id>/card/<id>`. Verified live during the dogfooding session — `https://host/63258149` → opens card 63258149 in the right space.
+
+#### Recovery hint for `/cards/{id}` 4xx suggested `kaiten_get_card` after it just failed
+
+The `RECOVERY_TOOLS` map for the bare `/cards` pattern recommended `kaiten_search_cards or kaiten_get_card`. The most common caller of this branch is `kaiten_get_card` itself failing — re-suggesting it doesn't help. Removed `kaiten_get_card` from that hint string. `kaiten_search_cards` is the only sensible recovery for "this card ID is wrong, look up the right one."
+
+### Documentation
+
+- README + docs/README.ru.md: new "Finding IDs from the browser URL" subsection. The student can copy IDs straight from the Kaiten address bar without dev tools — `/space/<id>`, `/boards/<id>`, `/card/<id>`. Maps directly to the env vars they need.
+- README + docs/README.ru.md: env vars table now bold-highlights that **only `KAITEN_API_TOKEN` and `KAITEN_URL` are required**; expanded the `KAITEN_DEFAULT_SPACE_ID` description to make clear it's an optimization, not a requirement.
+- README + docs/README.ru.md: two new entries in the Kaiten quirks section — the markdown-by-default behavior, and the workspace-tag delete API gap (Kaiten's `/tags` endpoint has no DELETE — `kaiten_remove_tag` only detaches from a card, orphan workspace tags can only be cleaned via the admin UI).
+
+### Live verified
+
+Every fix in this release was verified against the running 37controlseeing.kaiten.ru workspace via Playwright + curl during the dogfooding session — see the corresponding probe screenshots `live-test-*.png` and `probe-*.png`.
+
 ## [0.1.1] - 2026-04-08 — serverInfo identity fix
 
 ### Fixed

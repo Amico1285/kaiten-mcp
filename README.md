@@ -214,15 +214,27 @@ The current user is detected automatically — you don't need to set a user ID a
 
 ## Environment variables
 
+**Only two variables are required**: `KAITEN_API_TOKEN` and `KAITEN_URL`. Everything else is optional and exists for performance/safety tuning.
+
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `KAITEN_API_TOKEN` | yes | — | API token (Bearer) |
-| `KAITEN_URL` | yes | — | Kaiten instance URL, e.g. `https://your-company.kaiten.ru` |
-| `KAITEN_DEFAULT_SPACE_ID` | no | — | Default space ID for `kaiten_search_cards` when `spaceId` is omitted |
+| `KAITEN_API_TOKEN` | **yes** | — | API token (Bearer) |
+| `KAITEN_URL` | **yes** | — | Kaiten instance URL, e.g. `https://your-company.kaiten.ru` |
+| `KAITEN_DEFAULT_SPACE_ID` | no | — | Default space ID for `kaiten_search_cards` when `spaceId` is omitted. Without it, the LLM will discover spaces via `kaiten_list_spaces` first time it needs to search — costs one extra round-trip. Useful if you have many spaces and want to pin search to one. |
 | `KAITEN_REQUEST_TIMEOUT_MS` | no | `10000` | HTTP request timeout in milliseconds |
 | `KAITEN_CACHE_TTL_MS` | no | `300000` | TTL for cached reference data (spaces, boards, users, roles) |
-| `KAITEN_ALLOWED_SPACE_IDS` | no | — | Comma-separated whitelist of space IDs |
+| `KAITEN_ALLOWED_SPACE_IDS` | no | — | Comma-separated whitelist of space IDs the AI can access (multi-team safety) |
 | `KAITEN_ALLOWED_BOARD_IDS` | no | — | Comma-separated whitelist of board IDs |
+
+### Finding IDs from the browser URL
+
+You don't need a developer console — every Kaiten ID is visible in the browser address bar.
+
+- **Space ID** — click a space in the left menu, look at the URL: `https://your-company.kaiten.ru/space/762572` → space ID is `762572`.
+- **Board ID** — click a board, look at the URL: `https://your-company.kaiten.ru/space/762572/boards/1727446` → board ID is `1727446`.
+- **Card ID** — open a card, look at the URL: `https://your-company.kaiten.ru/space/762572/card/63258149` → card ID is `63258149` (also visible in the card header as `#63258149`).
+
+These are the values you put into `KAITEN_DEFAULT_SPACE_ID`, `KAITEN_ALLOWED_SPACE_IDS`, and `KAITEN_ALLOWED_BOARD_IDS`.
 
 ---
 
@@ -265,6 +277,8 @@ These are real Kaiten-side behaviors discovered during Wave 4–5 implementation
 - **`location_history.id` is a string**, not a number — it's preserved as-is (Number-parsing would lose precision for IDs > 2^53).
 - **Sprint not-found returns 403, not 404.** Both are handled by the error hint helper.
 - **Timesheet rejects empty array filters.** `card_ids=` (empty value) returns 400. Empty arrays are skipped from the query string entirely.
+- **Card descriptions and comments default to markdown.** Kaiten's UI renders descriptions and comments as markdown. If you send raw HTML without telling Kaiten, the angle brackets stay in the body and the UI shows them as literal text. To send HTML, pass `textFormat: 'html'` to `kaiten_create_card` / `kaiten_update_card` / `kaiten_create_comment` / `kaiten_update_comment` — the server will then parse and normalize. Discovered live during the 0.1.1 → 0.1.2 dogfooding round (cards use the documented `text_format_type_id`; comments use an undocumented `type` field that we verified works).
+- **Workspace tags can't be deleted via the API.** Kaiten's `/tags` endpoint only supports `GET` and `POST` (verified `docs/api/tags/`). `kaiten_remove_tag` only detaches a tag from a card — it doesn't remove it from the workspace pool. Orphan workspace tags accumulate over time and can only be cleaned up via the Kaiten admin UI.
 
 ## Troubleshooting
 

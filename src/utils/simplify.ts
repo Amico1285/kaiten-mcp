@@ -40,11 +40,14 @@ function nested(obj: Obj, key: string): Obj | undefined {
 
 function cardUrl(card: Obj): string {
   const base = getBaseUrl().replace("/api/latest", "");
-  const spaceId =
-    card.space_id
-    ?? nested(card, "board")?.space_id
-    ?? "";
-  return `${base}/space/${spaceId}/card/${card.id}`;
+  // Kaiten's GET/POST/PATCH /cards/{id} responses do NOT
+  // include space_id (verified docs/api/cards/retrieve-card.md
+  // and live probe 2026-04-08). The previous implementation
+  // produced `${base}/space//card/${id}` (double-slash, empty
+  // space) for every simplified card. Use the short form
+  // `${base}/${id}` instead — Kaiten redirects it server-side
+  // to the correct /space/<space_id>/card/<id> URL.
+  return `${base}/${card.id}`;
 }
 
 // ── Cards ──────────────────────────────────

@@ -7,6 +7,7 @@ import {
 import {
   type Obj, positiveId, buildOptionalBody,
   requireSomeFields,
+  textFormatComment, textFormatCommentId,
 } from "../utils/schemas.js";
 import {
   assertChildBelongsToParent,
@@ -74,18 +75,26 @@ export function registerCommentTools(
     {
       title: "Create Comment",
       description:
-        "Add an HTML comment to a card. Resolve cardId via "
-        + "kaiten_search_cards or kaiten_get_card; list "
-        + "existing comments via kaiten_get_card_comments. "
-        + "Returns: the created comment object (including its "
-        + "`id`, needed for kaiten_update_comment / "
-        + "kaiten_delete_comment).",
+        "Add a comment to a card. Markdown by default — if "
+        + "you are sending HTML, also pass "
+        + "`textFormat: 'html'` so Kaiten stores and renders "
+        + "the comment as HTML. Without that hint, raw HTML "
+        + "shows up in the UI as literal angle brackets. "
+        + "Resolve cardId via kaiten_search_cards or "
+        + "kaiten_get_card; list existing comments via "
+        + "kaiten_get_card_comments. Returns: the created "
+        + "comment object (including its `id`, needed for "
+        + "kaiten_update_comment / kaiten_delete_comment).",
       inputSchema: {
         cardId: positiveId(
           "Card ID (from kaiten_search_cards or "
           + "kaiten_get_card)",
         ),
-        text: z.string().describe("HTML comment"),
+        text: z.string().describe(
+          "Comment body. Markdown by default — pass "
+          + "`textFormat: 'html'` if you're sending HTML.",
+        ),
+        textFormat: textFormatComment,
         verbosity: verbositySchema,
       },
       annotations: {
@@ -96,13 +105,16 @@ export function registerCommentTools(
       },
     },
     handleTool(async ({
-      cardId, text, verbosity,
+      cardId, text, textFormat, verbosity,
     }) => {
       const v = asV(verbosity);
+      const body: Obj = { text };
+      const typeId = textFormatCommentId(textFormat);
+      if (typeId !== undefined) body.type = typeId;
       const [currentUser, comment] = await Promise.all([
         fetchCurrentUser(),
         post<Obj>(
-          `/cards/${cardId}/comments`, { text },
+          `/cards/${cardId}/comments`, body,
         ),
       ]);
       return jsonResult(
@@ -118,12 +130,14 @@ export function registerCommentTools(
     {
       title: "Update Comment",
       description:
-        "Replace the HTML body of an existing comment. "
-        + "Resolve commentId via kaiten_get_card_comments. "
-        + "The cardId is part of the URL path — both cardId "
-        + "and commentId must reference the actual "
-        + "card-comment pair (mismatched pair returns 500 "
-        + "from Kaiten). Returns: the updated comment object.",
+        "Replace the body of an existing comment. Markdown by "
+        + "default — if you are sending HTML, also pass "
+        + "`textFormat: 'html'`. Resolve commentId via "
+        + "kaiten_get_card_comments. The cardId is part of "
+        + "the URL path — both cardId and commentId must "
+        + "reference the actual card-comment pair (mismatched "
+        + "pair returns 500 from Kaiten). Returns: the updated "
+        + "comment object.",
       inputSchema: {
         cardId: positiveId(
           "Card ID the comment belongs to (from "
@@ -132,7 +146,11 @@ export function registerCommentTools(
         commentId: positiveId(
           "Comment ID (from kaiten_get_card_comments)",
         ),
-        text: z.string().optional().describe("New HTML body"),
+        text: z.string().optional().describe(
+          "New comment body. Markdown by default — pass "
+          + "`textFormat: 'html'` if you're sending HTML.",
+        ),
+        textFormat: textFormatComment,
         verbosity: verbositySchema,
       },
       annotations: {
@@ -143,14 +161,27 @@ export function registerCommentTools(
       },
     },
     handleTool(async ({
-      cardId, commentId, text, verbosity,
+      cardId, commentId, text, textFormat, verbosity,
     }) => {
       const v = asV(verbosity);
       const body = buildOptionalBody([
         ["text", text],
+        ["type", textFormatCommentId(textFormat)],
       ]);
 
-      requireSomeFields(body, "kaiten_update_comment", ["text"]);
+      // textFormat is a hint that only matters together with
+      // `text`. By itself it's a no-op for the API, so don't
+      // count it when checking for "at least one real field".
+      const meaningful: Obj = { ...body };
+      if (
+        meaningful.type !== undefined
+        && meaningful.text === undefined
+      ) {
+        delete meaningful.type;
+      }
+      requireSomeFields(
+        meaningful, "kaiten_update_comment", ["text"],
+      );
 
       await assertChildBelongsToParent({
         toolName: "kaiten_update_comment",

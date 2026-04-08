@@ -28,7 +28,7 @@ import { registerResources, registerPrompts } from "./resources.js";
 const server = new McpServer(
   {
     name: "kaiten-mcp",
-    version: "0.1.1",
+    version: "0.1.2",
   },
   {
     capabilities: {

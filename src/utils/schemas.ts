@@ -123,6 +123,75 @@ export function requireSomeFields(
   }
 }
 
+// Description / comment text format hint.
+//
+// Verified live 2026-04-08 against
+// docs/api/cards/{create-new-card,update-card}.md and the
+// running 37controlseeing.kaiten.ru instance:
+//
+// - Cards POST/PATCH accept `text_format_type_id` enum:
+//     1=markdown (default), 2=html, 3=jira_wiki
+// - Comments POST/PATCH accept an UNDOCUMENTED `type` enum:
+//     1=markdown (default), 2=html (jira_wiki not supported)
+//
+// Without this hint, Kaiten stores the body as-is. The UI
+// renders descriptions/comments as markdown, so any literal
+// HTML stays as plain text in the UI (visible angle brackets).
+// With the hint, Kaiten parses the input as the declared
+// format and normalizes it for storage, so the UI renders
+// correctly.
+//
+// We expose two slightly different enums because comments do
+// not support jira_wiki. The mapping helpers below convert
+// the enum string to the integer the API expects.
+
+export const textFormatCard = z.enum([
+  "markdown", "html", "jira_wiki",
+]).optional().describe(
+  "Hint to Kaiten about the format of `description`. "
+  + "Default = 'markdown' (Kaiten's own default). Set to "
+  + "'html' if you are sending HTML tags — Kaiten will then "
+  + "parse and normalize them so the UI renders correctly. "
+  + "Without this hint, raw HTML is stored verbatim and the "
+  + "UI shows literal angle brackets. Maps to API field "
+  + "`text_format_type_id` (1=markdown, 2=html, 3=jira_wiki).",
+);
+
+export const textFormatComment = z.enum([
+  "markdown", "html",
+]).optional().describe(
+  "Hint to Kaiten about the format of `text`. Default = "
+  + "'markdown' (Kaiten's own default). Set to 'html' if you "
+  + "are sending HTML — Kaiten will then store and render "
+  + "the comment as HTML. Without this hint, raw HTML in a "
+  + "comment shows up in the UI as literal angle brackets. "
+  + "Maps to API field `type` (1=markdown, 2=html). "
+  + "(jira_wiki is not supported for comments.)",
+);
+
+const TEXT_FORMAT_CARD_MAP = {
+  markdown: 1,
+  html: 2,
+  jira_wiki: 3,
+} as const;
+
+const TEXT_FORMAT_COMMENT_MAP = {
+  markdown: 1,
+  html: 2,
+} as const;
+
+export function textFormatCardId(
+  fmt: "markdown" | "html" | "jira_wiki" | undefined,
+): number | undefined {
+  return fmt ? TEXT_FORMAT_CARD_MAP[fmt] : undefined;
+}
+
+export function textFormatCommentId(
+  fmt: "markdown" | "html" | undefined,
+): number | undefined {
+  return fmt ? TEXT_FORMAT_COMMENT_MAP[fmt] : undefined;
+}
+
 export const paginationSchema = {
   limit: z.coerce.number().int().min(1).max(100)
     .default(20)

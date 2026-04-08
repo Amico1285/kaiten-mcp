@@ -46,10 +46,10 @@ const RECOVERY_TOOLS: Array<[RegExp, string]> = [
   [/\/cards\/\d+\/children\b/, "kaiten_list_subtasks"],
   [/\/cards\/\d+\/members\b/, "kaiten_list_card_members"],
   [/\/cards\/\d+\/blockers\b/, "kaiten_list_card_blockers"],
-  [
-    /\/cards\b/,
-    "kaiten_search_cards or kaiten_get_card",
-  ],
+  // For /cards/{id} the recovery is `kaiten_search_cards`
+  // alone — recommending `kaiten_get_card` after it just
+  // failed (the typical caller of this branch) is silly.
+  [/\/cards\b/, "kaiten_search_cards"],
   [/\/users\/\d+\/time-logs\b/, "kaiten_get_user_timelogs"],
   [/\/spaces\/\d+\/boards\b/, "kaiten_list_boards"],
   [/\/spaces\/\d+\/users\b/, "kaiten_list_space_users"],

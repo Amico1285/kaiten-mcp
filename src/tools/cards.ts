@@ -10,6 +10,7 @@ import {
   boolish, boolishWithDefault, removedField,
   positiveId, optionalPositiveId,
   optionalIsoDateTime, requireSomeFields,
+  textFormatCard, textFormatCardId,
 } from "../utils/schemas.js";
 import {
   simplifyCard, simplifyList,
@@ -347,8 +348,13 @@ export function registerCardTools(
         "Lane ID (from kaiten_list_lanes)",
       ),
       description: z.string().optional().describe(
-        "Card description (HTML)",
+        "Card description. Markdown by default. If you are "
+        + "sending HTML, also pass `textFormat: 'html'` so "
+        + "Kaiten parses and normalizes it — without that "
+        + "hint, raw HTML shows up in the UI as literal "
+        + "angle brackets.",
       ),
+      textFormat: textFormatCard,
       typeId: optionalPositiveId(
         "Card type ID (from kaiten_list_card_types)",
       ),
@@ -391,6 +397,10 @@ export function registerCardTools(
         ...buildOptionalBody([
           ["lane_id", p.laneId],
           ["description", p.description],
+          [
+            "text_format_type_id",
+            textFormatCardId(p.textFormat),
+          ],
           ["type_id", p.typeId],
           ["sort_order", p.sortOrder],
           ["size_text", p.sizeText],
@@ -435,8 +445,13 @@ export function registerCardTools(
         "New title",
       ),
       description: z.string().optional().describe(
-        "New description (HTML)",
+        "New description. Markdown by default. If you are "
+        + "sending HTML, also pass `textFormat: 'html'` so "
+        + "Kaiten parses and normalizes it — without that "
+        + "hint, raw HTML shows up in the UI as literal "
+        + "angle brackets.",
       ),
+      textFormat: textFormatCard,
       columnId: optionalPositiveId(
         "Move to column ID (from kaiten_list_columns)",
       ),
@@ -509,6 +524,10 @@ export function registerCardTools(
       const body = buildOptionalBody([
         ["title", fields.title],
         ["description", fields.description],
+        [
+          "text_format_type_id",
+          textFormatCardId(fields.textFormat),
+        ],
         ["column_id", fields.columnId],
         ["lane_id", fields.laneId],
         ["board_id", fields.boardId],
@@ -520,7 +539,20 @@ export function registerCardTools(
         ["properties", fields.properties],
       ]);
 
-      requireSomeFields(body, "kaiten_update_card", [
+      // textFormat is a hint that only matters together with
+      // `description`. By itself it's a no-op for the API, so
+      // ignore it when computing whether the call has at least
+      // one real field — otherwise an LLM passing only
+      // textFormat would silently send a body Kaiten interprets
+      // as "no change" and get the empty-PATCH 403.
+      const meaningful: Obj = { ...body };
+      if (
+        meaningful.text_format_type_id !== undefined
+        && meaningful.description === undefined
+      ) {
+        delete meaningful.text_format_type_id;
+      }
+      requireSomeFields(meaningful, "kaiten_update_card", [
         "title", "description", "columnId", "laneId",
         "boardId", "typeId", "sizeText", "asap",
         "ownerId", "dueDate", "properties",
