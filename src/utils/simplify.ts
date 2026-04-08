@@ -560,6 +560,52 @@ export function simplifyLane(
   return dispatch(lane, laneFns, v);
 }
 
+// ── Card types ─────────────────────────────
+//
+// /card-types is a global-per-company endpoint; the types
+// Bug/Feature/Story etc. are shared across every board. min
+// is intentionally terse ({id, name}) because that's the
+// historical shape list_card_types emitted inline before
+// this dispatch existed. normal adds the display attributes
+// an LLM needs to pick one type; max surfaces the full type
+// definition including card_properties / suggest_fields.
+const cardTypeFns: SimplifyFns = {
+  min: (t) => ({
+    id: t.id,
+    name: t.name,
+  }),
+  normal: (t) => ({
+    id: t.id,
+    name: t.name,
+    color: t.color ?? null,
+    letter: t.letter ?? null,
+    archived: t.archived ?? false,
+  }),
+  max: (t) => ({
+    id: t.id,
+    uid: t.uid ?? null,
+    name: t.name,
+    color: t.color ?? null,
+    letter: t.letter ?? null,
+    archived: t.archived ?? false,
+    locked: t.locked ?? false,
+    properties: t.properties ?? null,
+    card_properties: t.card_properties ?? null,
+    suggest_fields: t.suggest_fields ?? null,
+    description_template: t.description_template ?? null,
+    company_id: t.company_id ?? null,
+    author: t.author ?? null,
+    created: t.created ?? null,
+    updated: t.updated ?? null,
+  }),
+};
+
+export function simplifyCardType(
+  cardType: Obj, v: Verbosity = "min",
+): Obj {
+  return dispatch(cardType, cardTypeFns, v);
+}
+
 // ── Generic list helper ────────────────────
 
 export function simplifyList<T extends Obj>(
