@@ -29,5 +29,10 @@ jobs:
       - name: Type check
         run: npx tsc --noEmit
 
-      - name: Unit tests
-        run: npm test
+      - name: Build
+        run: npm run build
+      # NOTE: there are no unit tests in this repo. The source of
+      # truth for correctness is the live regression matrix in the
+      # parent project's test-tracker.md, which exercises every tool
+      # against a real Kaiten workspace. Type check + a clean build
+      # are the only static gates we run in CI.

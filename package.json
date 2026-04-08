@@ -25,9 +25,7 @@
     "start": "node build/index.js",
     "dev": "tsc --watch",
     "prepare": "npm run build",
-    "inspector": "npx @modelcontextprotocol/inspector build/index.js",
-    "test": "node --import tsx --test tests/unit/*.test.ts",
-    "test:integration": "bash tests/integration/run-all.sh"
+    "inspector": "npx @modelcontextprotocol/inspector build/index.js"
   },
   "keywords": [
     "mcp",
@@ -53,7 +51,6 @@
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
-    "tsx": "^4.21.0",
     "typescript": "^5.7.0"
   }
 }
