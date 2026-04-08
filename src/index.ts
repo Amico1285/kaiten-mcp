@@ -21,6 +21,8 @@ import { registerFileTools } from "./tools/files.js";
 import { registerCustomFieldTools } from "./tools/customFields.js";
 import { registerMemberTools } from "./tools/members.js";
 import { registerBlockerTools } from "./tools/blockers.js";
+import { registerExternalLinkTools } from "./tools/externalLinks.js";
+import { registerSprintTools } from "./tools/sprints.js";
 import { registerResources, registerPrompts } from "./resources.js";
 
 const server = new McpServer(
@@ -50,6 +52,8 @@ registerFileTools(server);
 registerCustomFieldTools(server);
 registerMemberTools(server);
 registerBlockerTools(server);
+registerExternalLinkTools(server);
+registerSprintTools(server);
 registerResources(server);
 registerPrompts(server);
 
