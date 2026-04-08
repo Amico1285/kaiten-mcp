@@ -1,20 +1,20 @@
 {
-  "name": "mcp-kaiten",
-  "version": "1.1.0",
+  "name": "kaiten-mcp",
+  "version": "0.1.0",
   "type": "module",
-  "description": "MCP server for Kaiten — cards, time-logs, boards, comments, users",
-  "author": "Artem Zheleznov (https://github.com/iamtemazhe)",
+  "description": "MCP server for Kaiten — 63 tools across cards, comments, checklists, time-tracking, members, blockers, sprints, custom properties, external links, file uploads, location history, and global timesheet. Forked from iamtemazhe/mcp-kaiten with extensive Wave 1-5 fixes.",
+  "author": "Amico1285 (https://github.com/Amico1285)",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/iamtemazhe/mcp-kaiten.git"
+    "url": "git+https://github.com/Amico1285/kaiten-mcp.git"
   },
-  "homepage": "https://github.com/iamtemazhe/mcp-kaiten#readme",
+  "homepage": "https://github.com/Amico1285/kaiten-mcp#readme",
   "bugs": {
-    "url": "https://github.com/iamtemazhe/mcp-kaiten/issues"
+    "url": "https://github.com/Amico1285/kaiten-mcp/issues"
   },
   "main": "build/index.js",
   "bin": {
-    "mcp-kaiten": "build/index.js"
+    "kaiten-mcp": "build/index.js"
   },
   "files": [
     "build"
@@ -34,6 +34,11 @@
     "mcp-server",
     "project-management",
     "time-tracking",
+    "members",
+    "blockers",
+    "sprints",
+    "preflight",
+    "llm",
     "cursor",
     "claude"
   ],

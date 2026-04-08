@@ -1,61 +1,69 @@
-# mcp-kaiten
+# kaiten-mcp
 
-[Русский](docs/README.ru.md) | [中文](docs/README.cn.md)
+[![npm version](https://img.shields.io/npm/v/kaiten-mcp.svg)](https://www.npmjs.com/package/kaiten-mcp)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-[Why mcp-kaiten exists](docs/WHYIEXIST.md)
+[Русский](docs/README.ru.md)
 
-MCP server for **Kaiten** — cards, time-logs, boards, comments, users.
+[Why kaiten-mcp exists](docs/WHYIEXIST.md)
 
-Connect Cursor, Claude Desktop, or any MCP client to your Kaiten workspace.
+MCP server for **Kaiten** — 63 tools covering cards, comments, checklists, time tracking, members, blockers, sprints, custom properties, external links, file uploads, location history, and a global timesheet.
 
-Start with a single command: `npx -y mcp-kaiten`.
+Connect Cursor, Claude Desktop, Claude Code, or any MCP client to your Kaiten workspace.
+
+Start with a single command: `npx -y kaiten-mcp`.
+
+This is a fork of [iamtemazhe/mcp-kaiten](https://github.com/iamtemazhe/mcp-kaiten) with extensive Wave 1–5 fixes: 22 net new tools, schema repairs, preflight checks, response simplification ladders, and reliability improvements. See [WHYIEXIST.md](docs/WHYIEXIST.md) and the [CHANGELOG](CHANGELOG.md).
 
 ---
 
 ## Quick Start
 
-### 1. Get API Token
+### 1. Get an API token
 
-1. Go to your Kaiten instance (e.g. `https://your-domain.kaiten.ru`)
-2. Open Profile → API Key
-3. Create a new token and copy it
+1. Open your Kaiten instance (e.g. `https://your-company.kaiten.ru`)
+2. Profile → API Key
+3. Create a token and copy it
 
-### 2. Add to Cursor / MCP Client
+### 2. Add to your MCP client
 
 ```json
 {
   "mcpServers": {
-    "mcp-kaiten": {
+    "kaiten": {
       "command": "npx",
-      "args": ["-y", "mcp-kaiten"],
+      "args": ["-y", "kaiten-mcp"],
       "env": {
         "KAITEN_API_TOKEN": "your-api-token",
-        "KAITEN_URL": "https://your-domain.kaiten.ru"
+        "KAITEN_URL": "https://your-company.kaiten.ru"
       }
     }
   }
 }
 ```
 
-The server starts automatically when the MCP client connects.
+That's it. The server starts automatically when the MCP client connects. There is no `user_id` to configure — the current user is resolved automatically from the token.
 
 ---
 
-## What Can It Do?
+## What can it do?
 
-### Cards
+**63 tools across 14 families.** Every tool accepts an optional `verbosity` parameter (`min` / `normal` / `max` / `raw`) to control response size.
+
+### Cards (8)
 
 | Tool | Description |
 |------|-------------|
-| `kaiten_get_card` | Get card by ID (with optional children) |
-| `kaiten_search_cards` | Search cards with filters, dates, pagination |
-| `kaiten_get_space_cards` | Get cards in a space |
-| `kaiten_get_board_cards` | Get cards on a board |
+| `kaiten_get_card` | Get card by ID, with optional children |
+| `kaiten_search_cards` | Search cards with 15+ filters, dates, pagination |
+| `kaiten_get_space_cards` | Cards in a space |
+| `kaiten_get_board_cards` | Cards on a board |
 | `kaiten_create_card` | Create a new card |
-| `kaiten_update_card` | Update card fields, move between columns/boards |
-| `kaiten_delete_card` | Delete a card |
+| `kaiten_update_card` | Update fields, move between columns/boards, set custom property values |
+| `kaiten_delete_card` | Delete a card (fails if it has logged time — delete time logs first) |
+| `kaiten_get_card_location_history` | Audit trail: how long the card sat in each column (Wave 5) |
 
-### Comments
+### Comments (4)
 
 | Tool | Description |
 |------|-------------|
@@ -64,55 +72,61 @@ The server starts automatically when the MCP client connects.
 | `kaiten_update_comment` | Update a comment |
 | `kaiten_delete_comment` | Delete a comment |
 
-### Time Logs
+### Time logs (6)
 
 | Tool | Description |
 |------|-------------|
-| `kaiten_get_user_timelogs` | Get time-logs for a user in a date range |
-| `kaiten_get_card_timelogs` | Get time-logs for a card |
+| `kaiten_get_user_timelogs` | Time logs for a user in a date range |
+| `kaiten_get_card_timelogs` | Time logs for a card |
 | `kaiten_create_timelog` | Create a time-log entry (requires `roleId`) |
 | `kaiten_update_timelog` | Update a time-log entry |
 | `kaiten_delete_timelog` | Delete a time-log entry (requires `cardId`) |
+| `kaiten_get_timesheet` | Global timesheet across users/spaces/boards (Wave 5) |
 
-### Spaces & Boards
+### Spaces & boards (9)
 
 | Tool | Description |
 |------|-------------|
 | `kaiten_list_spaces` | List all spaces |
 | `kaiten_get_space` | Get space by ID |
 | `kaiten_list_boards` | List boards in a space |
-| `kaiten_get_board` | Get board by ID |
-| `kaiten_list_columns` | List columns (statuses) of a board |
-| `kaiten_list_lanes` | List lanes (swimlanes) of a board |
-| `kaiten_list_card_types` | List card types of a board |
+| `kaiten_get_board` | Get board by ID (with inline columns/lanes at `verbosity=max`) |
+| `kaiten_list_columns` | Columns (statuses) of a board |
+| `kaiten_list_subcolumns` | Sub-columns inside a parent column (Wave 5) |
+| `kaiten_list_lanes` | Lanes (swimlanes) of a board |
+| `kaiten_list_card_types` | Card types (global to the company) |
+| `kaiten_list_space_users` | Users assigned to a specific space |
 
-### Subtasks
+### Subtasks (3)
 
 | Tool | Description |
 |------|-------------|
 | `kaiten_list_subtasks` | List child cards |
-| `kaiten_attach_subtask` | Attach a card as subtask |
+| `kaiten_attach_subtask` | Attach a card as a subtask |
 | `kaiten_detach_subtask` | Detach a subtask |
 
-### Tags
+### Tags (4)
 
 | Tool | Description |
 |------|-------------|
-| `kaiten_list_tags` | List all workspace tags |
-| `kaiten_add_tag` | Add a tag to a card |
+| `kaiten_list_card_tags` | Tags currently on a card |
+| `kaiten_list_workspace_tags` | All tags defined in the workspace |
+| `kaiten_add_tag` | Add a tag to a card (auto-creates the tag if it doesn't exist) |
 | `kaiten_remove_tag` | Remove a tag from a card |
 
-### Checklists
+### Checklists (7)
 
 | Tool | Description |
 |------|-------------|
-| `kaiten_get_checklists` | Get checklists for a card |
-| `kaiten_create_checklist` | Create a new checklist |
+| `kaiten_get_checklist` | Get a checklist with its items |
+| `kaiten_create_checklist` | Create a new checklist on a card |
 | `kaiten_delete_checklist` | Delete a checklist |
+| `kaiten_rename_checklist` | Rename a checklist |
 | `kaiten_add_checklist_item` | Add an item to a checklist |
-| `kaiten_update_checklist_item` | Update a checklist item |
+| `kaiten_update_checklist_item` | Update an item (text, checked, due date, responsible) |
+| `kaiten_delete_checklist_item` | Delete a checklist item |
 
-### Attachments
+### Files (3)
 
 | Tool | Description |
 |------|-------------|
@@ -120,19 +134,54 @@ The server starts automatically when the MCP client connects.
 | `kaiten_upload_file` | Upload a file to a card |
 | `kaiten_delete_file` | Delete a card attachment |
 
-### Custom Fields
+### Custom fields (2)
 
 | Tool | Description |
 |------|-------------|
-| `kaiten_list_custom_properties` | List custom properties for a space |
+| `kaiten_list_custom_properties` | List custom properties available in the workspace |
+| `kaiten_list_custom_property_select_values` | List allowed values for a `select` / `multi_select` property (Wave 5) |
 
-### Users
+### Users (3)
 
 | Tool | Description |
 |------|-------------|
-| `kaiten_get_current_user` | Get the authenticated user |
-| `kaiten_list_users` | List all users |
-| `kaiten_get_user_roles` | Get roles of the current user |
+| `kaiten_get_current_user` | The authenticated user |
+| `kaiten_list_users` | All users in the workspace |
+| `kaiten_list_company_roles` | Roles defined at the company level (renamed from `get_user_roles`) |
+
+### Card members (4) — Wave 4
+
+| Tool | Description |
+|------|-------------|
+| `kaiten_list_card_members` | Members assigned to a card |
+| `kaiten_add_card_member` | Add a user as a card member |
+| `kaiten_remove_card_member` | Remove a member from a card |
+| `kaiten_set_card_responsible` | Set the responsible user (the card always has an owner — only re-assignment) |
+
+### Card blockers (4) — Wave 4
+
+| Tool | Description |
+|------|-------------|
+| `kaiten_list_card_blockers` | Blockers on a card |
+| `kaiten_add_card_blocker` | Add a blocker (free-form reason or referencing another card) |
+| `kaiten_update_card_blocker` | Update blocker reason or referenced card |
+| `kaiten_release_card_blocker` | Release a blocker (soft release — flips `released:true`, the row stays in the list) |
+
+### Card external links (4) — Wave 5
+
+| Tool | Description |
+|------|-------------|
+| `kaiten_list_card_external_links` | List external links on a card |
+| `kaiten_add_card_external_link` | Link the card to a Jira ticket, GitHub issue, etc. |
+| `kaiten_update_card_external_link` | Update a link's URL or description |
+| `kaiten_remove_card_external_link` | Remove a link (true hard-delete, unlike blockers) |
+
+### Sprints (2) — Wave 5
+
+| Tool | Description |
+|------|-------------|
+| `kaiten_list_sprints` | List sprints visible to the user |
+| `kaiten_get_sprint` | Get a sprint summary with its cards |
 
 ### Resources
 
@@ -146,52 +195,84 @@ The server starts automatically when the MCP client connects.
 | Name | Description |
 |------|-------------|
 | `create-card` | Step-by-step card creation workflow |
-| `time-report` | Generate time tracking report for a date range |
-| `board-overview` | Summarize board: columns, cards, overdue items |
+| `time-report` | Time tracking report for a date range |
+| `board-overview` | Summarize a board: columns, cards, overdue items |
 
 ---
 
 ## Authentication
 
-Kaiten uses API tokens for authentication. OAuth is not supported by the Kaiten API.
+Kaiten uses API tokens. OAuth is not supported by the Kaiten API.
 
-1. Go to your Kaiten profile → API Key
-2. Create and copy the token
-3. Set `KAITEN_API_TOKEN` in MCP config
+1. Profile → API Key in your Kaiten instance
+2. Create a token, copy it
+3. Set `KAITEN_API_TOKEN` and `KAITEN_URL` in your MCP client config
 
-### Environment Variables
+The current user is detected automatically — you don't need to set a user ID anywhere.
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `KAITEN_API_TOKEN` | yes | API token (Bearer) |
-| `KAITEN_URL` | yes | Kaiten instance URL (e.g. `https://your-domain.kaiten.ru`) |
-| `KAITEN_DEFAULT_SPACE_ID` | no | Default space ID for card search (if `spaceId` is not specified) |
-| `KAITEN_ALLOWED_SPACE_IDS` | no | Comma-separated space IDs to restrict access |
-| `KAITEN_ALLOWED_BOARD_IDS` | no | Comma-separated board IDs to restrict access |
+---
+
+## Environment variables
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `KAITEN_API_TOKEN` | yes | — | API token (Bearer) |
+| `KAITEN_URL` | yes | — | Kaiten instance URL, e.g. `https://your-company.kaiten.ru` |
+| `KAITEN_DEFAULT_SPACE_ID` | no | — | Default space ID for `kaiten_search_cards` when `spaceId` is omitted |
+| `KAITEN_REQUEST_TIMEOUT_MS` | no | `10000` | HTTP request timeout in milliseconds |
+| `KAITEN_CACHE_TTL_MS` | no | `300000` | TTL for cached reference data (spaces, boards, users, roles) |
+| `KAITEN_ALLOWED_SPACE_IDS` | no | — | Comma-separated whitelist of space IDs |
+| `KAITEN_ALLOWED_BOARD_IDS` | no | — | Comma-separated whitelist of board IDs |
 
 ---
 
 ## Verbosity
 
-Every tool accepts an optional `verbosity` parameter (default: `min`) to control response size. Use `min` for compact responses that save LLM context, `normal` for common fields, `max` for full detail, or `raw` for the unprocessed API response.
+Every tool accepts an optional `verbosity` parameter (default: `min`):
+
+| Level | Description |
+|-------|-------------|
+| `min` | Compact response, saves LLM context — only key fields |
+| `normal` | Common fields — strict superset of `min` |
+| `max` | Full detail — strict superset of `normal`, includes nested children where relevant |
+| `raw` | Unprocessed API response, no transformation |
+
+The `min` → `normal` → `max` ladder is a strict superset chain (Wave 4 PR 4.6) — anything visible at `min` is also visible at `normal` and `max`.
 
 ## Reliability
 
-- **Automatic retries:** failed requests (429, 5xx, network errors, timeouts) are retried up to 3 times with exponential backoff.
-- **Idempotency:** write requests include idempotency keys to prevent duplicate mutations on retries.
-- **Caching:** reference data (spaces, boards, users, roles) is cached with automatic background refresh.
-- **Response optimization:** compact JSON, automatic truncation of large responses, verbosity control.
-- **Crash protection:** unhandled errors are logged without crashing the server.
-- **Actionable errors:** error messages include hints on what to do next.
+- **Cross-resource preflight** (Wave 4 PR 4.7): mutating tools that take both a parent ID and a child ID (e.g. card + comment, card + checklist) verify the child belongs to the parent before sending the mutation. Prevents silent cross-resource bugs.
+- **Author enrichment** (Wave 2): comment/timelog responses include `author_name` even when the API returns only `author_id` — the current user's name is filled in client-side.
+- **Context-aware error hints** (Wave 4 PR 4.5): error messages from the API include a hint about which related read tool to call to recover (e.g. "404 on `/cards/{id}` → try `kaiten_search_cards`").
+- **Automatic retries**: failed requests (429, 5xx, network errors, timeouts) are retried up to 3 times with exponential backoff and jitter. The `Retry-After` header is honored.
+- **Idempotency**: write requests include idempotency keys to prevent duplicate mutations on retries.
+- **Caching**: spaces, boards, users, roles cached in-memory with configurable TTL. Stale data is returned immediately while a background refresh runs.
+- **Crash protection**: unhandled errors are logged without crashing the server.
+- **Response truncation**: very large responses are auto-truncated to protect the LLM context window.
+
+---
+
+## Kaiten API quirks worth knowing
+
+These are real Kaiten-side behaviors discovered during Wave 4–5 implementation. Each is mitigated in the corresponding tool, but the LLM will see them in tool descriptions.
+
+- **`update_card.state` is read-only.** The card's `state` is computed from `column.type` (1→queued, 2→in_progress, 3→done). To change state, move the card with `column_id`.
+- **`update_card.size` doesn't accept a number.** Use `sizeText: "5 SP"` (sent as `size_text`) or `estimate_workload` in seconds.
+- **`owner_id` cannot be cleared.** Cards always have an owner. You can only re-assign, not remove.
+- **Empty `PATCH /cards/{id}`** returns 403 (a quirk of the API itself). The server validates this client-side and returns a clearer error.
+- **Blocker `DELETE` is a soft release.** It flips `released:true` but keeps the row in the list endpoint. The tool is named `kaiten_release_card_blocker` (not `remove_*`) to make this explicit.
+- **External-link `DELETE` is a true hard-delete.** Asymmetric with blockers — the link disappears.
+- **`location_history.id` is a string**, not a number — it's preserved as-is (Number-parsing would lose precision for IDs > 2^53).
+- **Sprint not-found returns 403, not 404.** Both are handled by the error hint helper.
+- **Timesheet rejects empty array filters.** `card_ids=` (empty value) returns 400. Empty arrays are skipped from the query string entirely.
 
 ## Troubleshooting
 
 - **Server won't start:** check that `KAITEN_API_TOKEN` and `KAITEN_URL` are set in the MCP config `env` block.
-- **401 errors:** token may be expired or invalid. Generate a new one in Kaiten profile.
-- **Large responses:** use filters (`boardId`, `spaceId`) or lower `limit` to reduce response size.
+- **401 errors:** the token may be expired or invalid — generate a new one in your Kaiten profile.
+- **Large responses:** use filters (`boardId`, `spaceId`) or lower the `limit`.
+- **403 on a write operation:** check the card isn't archived and that your token has write access to the space.
 
 ---
 
-[Changelog](CHANGELOG.md)
-
-[License](LICENSE)
+[Changelog](CHANGELOG.md) · [License](LICENSE)

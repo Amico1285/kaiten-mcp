@@ -1,101 +1,83 @@
-# Why mcp-kaiten exists
+# Why kaiten-mcp exists
 
-## Problem
+## Background
 
-Kaiten is a popular project management tool, but existing solutions for MCP integration have trade-offs:
+`kaiten-mcp` is a fork of [iamtemazhe/mcp-kaiten](https://github.com/iamtemazhe/mcp-kaiten) (originally by Artem Zheleznov). The upstream project provided a solid foundation — 41 tools covering the core card lifecycle — but in real-world use against a production Kaiten workspace, several gaps and rough edges surfaced. This fork closes them.
 
-- Some implementations auto-generate 246 tools from the API, overwhelming AI context
-- Others focus on infrastructure (logging, metrics, diagnostics) but lack time tracking, checklists, tags, and attachments
-- Still other implementations integrate git operations but have no retry, timeout, or caching
-- Few alternative servers cover the full card lifecycle while keeping the tool count manageable
+The original npm name `mcp-kaiten` is still owned by the upstream author (currently at v1.1.0). We publish this fork under a separate name, `kaiten-mcp`, starting from version 0.1.0 — a fresh start that signals "this is a different, independent codebase, not a drop-in replacement."
 
-## What mcp-kaiten gives you
+## What this fork adds
 
-### 1. Full card lifecycle in 41 tools
+Five waves of work, fully merged.
 
-Covers the complete workflow around Kaiten cards without overwhelming the AI:
+### Wave 1 — schema repairs
 
-**Cards** — Create, read, update, delete, search with 15+ filters, list by space or board
+Six critical FAIL-class bugs in the original schemas, all caught against `docs/api/`:
 
-**Subtasks** — List child cards, attach and detach subtasks
+- `list_custom_properties` was hitting the wrong endpoint
+- `list_tags` couldn't list tags on a card (the endpoint requires a card scope)
+- `update_card.size:N` was silently rejected by the API
+- `update_card.state:N` was a no-op (state is computed, not stored)
+- `update_card.ownerId:null` was rejected with a confusing 400
+- `verbosity=max` for `get_space` / `get_board` was missing inline columns/lanes
 
-**Comments** — List, create, update, and delete card comments
+### Wave 2 — author enrichment, removed-field guidance, boolean coercion
 
-**Time tracking** — Full CRUD for time logs, fetch by user or by card for any date range
+- Comment and timelog responses now include `author_name` even when the API returns only `author_id`. The current user is fetched in parallel and joined client-side.
+- `update_card.size:N` and `state:N` got friendly explanatory errors with pointers to the working alternatives (`sizeText`, `columnId`).
+- Boolean parameters across 11 tools now accept `"true"` / `"false"` strings, not just real booleans (because `z.coerce.boolean()` is broken — `Boolean("false") === true`).
 
-**Spaces and boards** — Navigate the workspace structure: spaces, boards, columns, lanes, card types
+### Wave 3 — file metadata
 
-**Tags** — List all tags, add and remove tags from cards
+`list_files` and `upload_file` were returning `content_type:null` for every file. Two root causes: (1) the simplifier was reading a non-existent field name, and (2) Kaiten doesn't actually populate the field for regular uploads. Fixed by reading the correct API field plus adding a filename-extension fallback for the 20 most common file types.
 
-**Checklists** — Create, read, and delete checklists; add and update checklist items
+### Wave 4 — UX/coverage wave (12 net new tools)
 
-**Attachments** — List, upload, and delete card files
+Big quality push, executed across four phases and eight parallel teammates in worktrees:
 
-**Custom fields** — List available custom properties for a space
+- **Schema helper library:** `positiveId`, `optionalPositiveId`, `isoDate`, `requireSomeFields` etc., applied uniformly across every handler.
+- **Context-aware error hints:** error messages from the API now suggest a related read tool ("404 on `/cards/{id}` → try `kaiten_search_cards`"), based on a 22-pattern URL→tool map.
+- **`verbosity=max` strict-superset ladder:** for 7 entity types (user, timelog, column, lane, space, checklist item, card type), `max` is now a strict superset of `normal`, which is a strict superset of `min`.
+- **Cross-resource preflight:** 9 mutating tools that take both a parent ID and a child ID now verify the child belongs to the parent before sending the mutation. Closes a class of silent cross-resource bugs.
+- **New tools:** `list_workspace_tags`, `delete_checklist_item`, `rename_checklist`, `list_space_users`, `list_card_members` + `add/remove_card_member` + `set_card_responsible`, `list_card_blockers` + `add/update/release_card_blocker`. Plus `update_card.properties` for setting custom-property values inline.
+- **Live-discovered Kaiten quirk:** `DELETE` on a blocker is a soft release (flips `released:true` and keeps the row), not a hard delete. The tool is named `release_card_blocker` and `destructiveHint:false` to make this explicit.
 
-**Users** — Get current user, list all users, get user roles
+### Wave 5 — coverage extension (10 net new tools)
 
-### 2. Balanced tool count
+The remaining MISSING-useful endpoints from the API coverage audit:
 
-41 tools is enough for real-world scenarios without flooding the AI context. Other implementations with comparable domain coverage may expose 246 tools (for example, auto-generated from the full API). Infrastructure-focused alternative servers with a similar scope often ship 26 tools but lack time tracking, checklists, tags, attachments, and custom fields.
+- **Card external links** (4 tools): list / add / update / remove. Lets the LLM link a Kaiten card to a Jira ticket or GitHub issue without polluting the description field.
+- **Sprints** (2 tools): list / get summary. Read-only.
+- **`get_card_location_history`**: audit trail showing how long the card sat in each column.
+- **`list_custom_property_select_values`**: lets the LLM safely set values for `select` / `multi_select` custom properties (without this, Wave 4's `update_card.properties` is unsafe).
+- **`get_timesheet`**: global timesheet across users/spaces/boards for "who logged how much this week" queries.
+- **`list_subcolumns`**: completes the structural view for boards with sub-columns.
 
-### 3. End-to-end response optimization
+Five additional Kaiten quirks were discovered and worked around:
 
-The entire request-response pipeline is optimized for AI consumption:
+- `location_history.id` is a string, not a number — preserved as-is to avoid precision loss.
+- `GET /sprints/{id}` returns 403 (not 404) for non-existent sprints.
+- `POST /cards/{id}/external-links` response lacks `card_id` and `external_link_id` (they only appear in the GET list endpoint).
+- `GET /time-logs?card_ids=` (empty value) returns 400 — empty arrays are skipped from the query string entirely.
+- `DELETE /cards/{id}/external-links/{id}` is a true hard-delete, asymmetric with the blocker soft-release.
 
-- Only needed data is fetched from the API, reference data is cached
-- 4 verbosity levels with type-specific simplification for every entity
-- Automatic truncation prevents oversized responses from consuming context
-- Tool descriptions include workflow hints and cross-references between related tools
-- Compact JSON output saves tokens
+## What this fork keeps from upstream
 
-### 4. Reliability
+Everything that already worked: the verbosity ladder, the response simplification pipeline, the retry/idempotency layer, the resource and prompt registrations, the cache layer, the env-var configuration, the build setup. Wave 1–5 is additive — schemas got tightened, tools got added, edge cases got handled. None of the upstream tool descriptions or response shapes were broken.
 
-- Automatic retries with exponential backoff and jitter for server errors, rate limits, and network failures
-- Idempotency protection prevents duplicate mutations on retries
-- Configurable request timeouts
-- Crash protection for unhandled errors
-- Automatic response truncation
-- Structured logging with configurable levels
-- Actionable error messages with hints on how to fix the issue
+## When to use this fork instead of upstream
 
-### 5. Smart caching
+- You hit one of the bugs Wave 1–3 fixes (custom properties, tag listing, size/state updates, file metadata).
+- You need a tool that exists in Wave 4 or 5 but not upstream (members, blockers, external links, sprints, location history, timesheet, custom-property select values, subcolumns, workspace tag listing, checklist rename / item delete, space user listing).
+- You want preflight safety on cross-resource mutations.
+- You want context-aware error hints rather than raw API errors.
 
-Spaces, boards, columns, lanes, card types, users, and tags are cached in memory with configurable TTL. Stale data is returned immediately while a background refresh runs — the caller never waits for cache updates.
+## When upstream is fine
 
-### 6. Access restrictions
+- You only need the basic card lifecycle (CRUD + comments + time logs) and don't touch the affected areas.
+- You're okay debugging silent fails on size/state/owner updates yourself.
+- You don't use checklists, tags, files, or custom properties beyond what Wave 0 already shipped.
 
-Environment-based restrictions on which spaces and boards the AI can access — essential for multi-team environments where not all data should be exposed.
+## Credit
 
-### 7. MCP resources and prompts
-
-Built-in MCP resources provide instant access to workspace structure (spaces, boards) without tool calls. Prompt templates guide common workflows: creating cards, generating time reports, reviewing boards.
-
-### 8. Standard configuration
-
-Environment variables with schema validation at startup. Invalid configuration produces a descriptive error. Supports arbitrary base URLs for on-premise installations.
-
-### 9. Minimal footprint
-
-2 runtime dependencies, native fetch. Fast install, minimal attack surface, instant startup.
-
-### 10. Advanced search
-
-15+ search filters: title, owner, board, column, tags, dates, card type, completion status, archive exclusion, and more.
-
-## Strengths
-
-| Advantage | Details |
-|---|---|
-| Domain coverage | Time tracking, checklists, attachments, custom fields, card types, user roles |
-| Tool count balance | 41 tools covering the full card lifecycle |
-| Retry + idempotency | Server errors, network failures, and duplicate prevention |
-| Access restrictions | Space/board whitelist |
-| Smart caching | Instant responses with background refresh |
-| Crash protection | Unhandled error recovery |
-| MCP resources and prompts | Built-in workspace data and workflow templates |
-| Minimal dependencies | 2 runtime dependencies, native fetch |
-| On-premise support | Arbitrary URL, not locked to specific domains |
-| Extended search | 15+ filter parameters |
-| Structured logging | Configurable log levels for debugging |
-| Actionable errors | Error messages include hints on what to do next |
+The original `mcp-kaiten` codebase, the verbosity model, the simplification approach, the cache layer, the resource and prompt patterns, and the entire build/runtime skeleton are the work of [Artem Zheleznov (iamtemazhe)](https://github.com/iamtemazhe). This fork is layered on top.
