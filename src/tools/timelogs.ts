@@ -239,6 +239,123 @@ export function registerTimelogTools(
   );
 
   server.registerTool(
+    "kaiten_get_timesheet",
+    {
+      title: "Get Global Timesheet",
+      description:
+        "Get the global timesheet across cards and users "
+        + "for a date range — answers 'who logged how much "
+        + "time on which cards last week'. `from` and `to` "
+        + "are REQUIRED (YYYY-MM-DD; the API returns 400 "
+        + "without them). Optional array filters narrow by "
+        + "users, cards, boards, spaces, columns, tags, or "
+        + "groups — pass JSON arrays, the handler joins "
+        + "them with commas internally. Empty arrays are "
+        + "skipped entirely (passing an empty filter would "
+        + "itself return 400). For per-user timelogs prefer "
+        + "kaiten_get_user_timelogs; for per-card prefer "
+        + "kaiten_get_card_timelogs. Returns an array of "
+        + "timelog objects, each with author_id / "
+        + "author_name enriched when the author is the API "
+        + "caller. limit max 200.",
+      inputSchema: {
+        from: isoDate("Range start (YYYY-MM-DD)"),
+        to: isoDate("Range end (YYYY-MM-DD)"),
+        cardIds: z.array(positiveId("Card ID"))
+          .optional()
+          .describe(
+            "Filter by card IDs "
+            + "(from kaiten_search_cards)",
+          ),
+        userIds: z.array(positiveId("User ID"))
+          .optional()
+          .describe(
+            "Filter by user IDs "
+            + "(from kaiten_list_users)",
+          ),
+        spaceIds: z.array(positiveId("Space ID"))
+          .optional()
+          .describe(
+            "Filter by space IDs "
+            + "(from kaiten_list_spaces)",
+          ),
+        boardIds: z.array(positiveId("Board ID"))
+          .optional()
+          .describe(
+            "Filter by board IDs "
+            + "(from kaiten_list_boards)",
+          ),
+        columnIds: z.array(positiveId("Column ID"))
+          .optional()
+          .describe(
+            "Filter by column IDs "
+            + "(from kaiten_list_columns)",
+          ),
+        tagIds: z.array(positiveId("Tag ID"))
+          .optional()
+          .describe(
+            "Filter by tag IDs "
+            + "(from kaiten_list_workspace_tags)",
+          ),
+        groupIds: z.array(positiveId("Group ID"))
+          .optional()
+          .describe("Filter by group IDs"),
+        limit: z.coerce.number().int().positive().max(200)
+          .optional()
+          .describe("Max results (max 200)"),
+        offset: z.coerce.number().int().nonnegative()
+          .optional()
+          .describe("Offset for pagination"),
+        verbosity: verbositySchema,
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: true,
+        idempotentHint: true,
+      },
+    },
+    handleTool(async ({
+      from, to,
+      cardIds, userIds, spaceIds, boardIds,
+      columnIds, tagIds, groupIds,
+      limit, offset, verbosity,
+    }) => {
+      const v = asV(verbosity);
+      const query: Record<string, string> = { from, to };
+      // Kaiten rejects `card_ids=` with an empty value
+      // (400), so skip any array filter that came in empty.
+      // Non-empty arrays → comma-joined string.
+      const addIds = (key: string, arr?: number[]) => {
+        if (arr && arr.length > 0) {
+          query[key] = arr.join(",");
+        }
+      };
+      addIds("card_ids", cardIds);
+      addIds("user_ids", userIds);
+      addIds("space_ids", spaceIds);
+      addIds("board_ids", boardIds);
+      addIds("column_ids", columnIds);
+      addIds("tag_ids", tagIds);
+      addIds("group_ids", groupIds);
+      if (limit !== undefined) {
+        query.limit = String(limit);
+      }
+      if (offset !== undefined) {
+        query.offset = String(offset);
+      }
+
+      const [currentUser, logs] = await Promise.all([
+        fetchCurrentUser(),
+        get<Obj[]>("/time-logs", query),
+      ]);
+      return jsonResult(
+        simplifyTimelogList(logs, v, currentUser),
+      );
+    }),
+  );
+
+  server.registerTool(
     "kaiten_delete_timelog",
     {
       title: "Delete Timelog",
