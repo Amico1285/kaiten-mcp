@@ -1,0 +1,42 @@
+name: Feature Request
+description: Suggest a new tool or improvement
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What would you like?
+      description: Describe the feature or improvement.
+      placeholder: "Add a kaiten_archive_card tool that moves a card to the archived state."
+    validations:
+      required: true
+
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use case
+      description: Why is this useful? What problem does it solve?
+    validations:
+      required: true
+
+  - type: textarea
+    id: api-reference
+    attributes:
+      label: Kaiten API reference
+      description: If you know the relevant Kaiten API endpoint, link or describe it here.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Scope
+      options:
+        - New tool
+        - Improvement to existing tool
+        - New resource or prompt
+        - Documentation
+        - Other
+    validations:
+      required: true

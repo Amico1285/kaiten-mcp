@@ -280,6 +280,24 @@ These are real Kaiten-side behaviors discovered during Wave 4–5 implementation
 - **Card descriptions and comments default to markdown.** Kaiten's UI renders descriptions and comments as markdown. If you send raw HTML without telling Kaiten, the angle brackets stay in the body and the UI shows them as literal text. To send HTML, pass `textFormat: 'html'` to `kaiten_create_card` / `kaiten_update_card` / `kaiten_create_comment` / `kaiten_update_comment` — the server will then parse and normalize. Discovered live during the 0.1.1 → 0.1.2 dogfooding round (cards use the documented `text_format_type_id`; comments use an undocumented `type` field that we verified works).
 - **Workspace tags can't be deleted via the API.** Kaiten's `/tags` endpoint only supports `GET` and `POST` (verified `docs/api/tags/`). `kaiten_remove_tag` only detaches a tag from a card — it doesn't remove it from the workspace pool. Orphan workspace tags accumulate over time and can only be cleaned up via the Kaiten admin UI.
 
+## LLM Guide
+
+The package ships with [`LLM_GUIDE.md`](LLM_GUIDE.md) — a comprehensive reference designed to be read by an LLM **before** it starts using the tools. It covers the Kaiten object hierarchy, common workflows, API quirks, error recovery patterns, and a tool selection quick-reference.
+
+### How to use it
+
+Add this line to your project's `CLAUDE.md` (or equivalent instructions file):
+
+```
+Read ./node_modules/kaiten-mcp/LLM_GUIDE.md before working with Kaiten.
+```
+
+This gives the LLM full context about Kaiten's data model and the non-obvious behaviors (like `state` being computed from `column.type`, or blocker soft-release semantics) before it makes its first tool call.
+
+The guide is included in the npm package — it's available at `node_modules/kaiten-mcp/LLM_GUIDE.md` after `npx -y kaiten-mcp` runs.
+
+---
+
 ## Troubleshooting
 
 - **Server won't start:** check that `KAITEN_API_TOKEN` and `KAITEN_URL` are set in the MCP config `env` block.
@@ -289,4 +307,10 @@ These are real Kaiten-side behaviors discovered during Wave 4–5 implementation
 
 ---
 
-[Changelog](CHANGELOG.md) · [License](LICENSE)
+## Contributing
+
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions, code style, and PR guidelines.
+
+---
+
+[Changelog](CHANGELOG.md) · [Contributing](CONTRIBUTING.md) · [License](LICENSE)
