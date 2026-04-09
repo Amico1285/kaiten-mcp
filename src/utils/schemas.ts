@@ -154,7 +154,11 @@ export const textFormatCard = z.enum([
   + "parse and normalize them so the UI renders correctly. "
   + "Without this hint, raw HTML is stored verbatim and the "
   + "UI shows literal angle brackets. Maps to API field "
-  + "`text_format_type_id` (1=markdown, 2=html, 3=jira_wiki).",
+  + "`text_format_type_id` (1=markdown, 2=html, 3=jira_wiki). "
+  + "WARNING: 'jira_wiki' support in Kaiten is partial — "
+  + "italic `_text_` does not render and underscores inside "
+  + "`{code}` blocks get mangled to asterisks (verified live "
+  + "2026-04-09). Prefer 'markdown' or 'html' for new content.",
 );
 
 export const textFormatComment = z.enum([
@@ -200,9 +204,27 @@ export const paginationSchema = {
     .describe("Offset for pagination"),
 };
 
+// Kaiten's `condition` filter on the `/cards` listing accepts
+// only 1 (live, on board) or 2 (archived). Per
+// docs/api/cards/retrieve-card-list.md:57 — "1 - on board,
+// 2 - archived". The value 3 EXISTS in the response enum as
+// "deleted" (line 325) but is NOT a valid filter value: passing
+// condition=3 returns an empty list, not "all cards including
+// archived" as the previous tool description wrongly implied.
+// Verified live 2026-04-09: get_board_cards(1727463, condition=3)
+// → [], while condition=1 returned the live card. To list both
+// live and archived in one go, omit the parameter (Kaiten
+// defaults to live) or call twice and merge.
 export const conditionSchema = z.coerce.number().int()
-  .min(1).max(3).default(1)
-  .describe("1=active, 2=archived, 3=all");
+  .min(1).max(2).default(1)
+  .describe(
+    "Card condition filter. 1=live (on board, default), "
+    + "2=archived. Kaiten does not support a filter for both "
+    + "in one call — omit (defaults to live) or query twice "
+    + "and merge. Note: passing 3 was historically described "
+    + "as 'all' but actually returns deleted cards only — the "
+    + "schema now rejects 3 to prevent silent empty results.",
+  );
 
 export function buildOptionalBody(
   pairs: [string, unknown][],

@@ -112,6 +112,48 @@ function shouldRetry(status: number): boolean {
   return RETRYABLE_STATUSES.has(status);
 }
 
+// Strips inline data: URIs from any Kaiten response.
+//
+// Kaiten generates a ~1.4 KB base64 PNG from user initials and
+// embeds it in `avatar_initials_url` on every user object — and
+// nearly every Kaiten response nests at least one user (owner,
+// author, members, updater_id-resolved user, etc.), so a single
+// list endpoint can return the same blob 50× over. The LLM
+// cannot decode base64 binary and the bytes are pure context
+// pollution. Strip them globally before the result reaches the
+// simplifier or the tool handler.
+//
+// Applies to ALL verbosities including raw — `verbosity: raw`
+// is meant to expose raw API *fields*, not raw inline blobs
+// the LLM cannot use. If a caller really needs the bytes they
+// can hit the Kaiten REST API with curl directly.
+//
+// The >200-char threshold protects legitimate short `data:`
+// strings inside user content (e.g. someone literally pastes
+// "data:text/plain,hi" into a card description) from being
+// accidentally stripped. Kaiten's avatar blob is ~1400 chars,
+// so the margin is comfortable.
+function isDataUriBlob(v: unknown): v is string {
+  return typeof v === "string"
+    && v.startsWith("data:")
+    && v.length > 200;
+}
+
+function stripDataUriBlobs<T>(obj: T): T {
+  if (Array.isArray(obj)) {
+    return obj.map((item) => stripDataUriBlobs(item)) as T;
+  }
+  if (obj && typeof obj === "object") {
+    const result: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(obj)) {
+      if (isDataUriBlob(v)) continue;
+      result[k] = stripDataUriBlobs(v);
+    }
+    return result as T;
+  }
+  return obj;
+}
+
 function getRetryDelay(
   attempt: number,
   resp?: Response,
@@ -175,7 +217,7 @@ async function request<T>(
       if (resp.ok) {
         const result = resp.status === 204
           ? {} as T
-          : await resp.json() as T;
+          : stripDataUriBlobs(await resp.json() as T);
         clearTimeout(timer);
         logger.debug(
           `${method} ${path} → ${resp.status}`,
@@ -306,5 +348,5 @@ export async function uploadFile<T>(
     throw new KaitenApiError(resp.status, text, url);
   }
 
-  return resp.json() as Promise<T>;
+  return stripDataUriBlobs(await resp.json()) as T;
 }

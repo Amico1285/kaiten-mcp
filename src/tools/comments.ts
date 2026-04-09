@@ -80,6 +80,15 @@ export function registerCommentTools(
         + "`textFormat: 'html'` so Kaiten stores and renders "
         + "the comment as HTML. Without that hint, raw HTML "
         + "shows up in the UI as literal angle brackets. "
+        + "QUIRK: Kaiten's comment markdown parser is a "
+        + "CommonMark subset and does NOT support ATX "
+        + "headings (`### Header`) — they render as literal "
+        + "text. Bold, italic, lists, inline code, code "
+        + "blocks, links and blockquotes all work. Card "
+        + "DESCRIPTION markdown does support headings — the "
+        + "limitation is comment-specific. Use plain bold or "
+        + "switch to HTML if you need a heading inside a "
+        + "comment. "
         + "Resolve cardId via kaiten_search_cards or "
         + "kaiten_get_card; list existing comments via "
         + "kaiten_get_card_comments. Returns: the created "
@@ -92,7 +101,10 @@ export function registerCommentTools(
         ),
         text: z.string().describe(
           "Comment body. Markdown by default — pass "
-          + "`textFormat: 'html'` if you're sending HTML.",
+          + "`textFormat: 'html'` if you're sending HTML. "
+          + "Note: heading syntax (`### Header`) is NOT "
+          + "supported in comment markdown — render as literal "
+          + "text. Bold/list/code/link/blockquote work.",
         ),
         textFormat: textFormatComment,
         verbosity: verbositySchema,
@@ -132,7 +144,11 @@ export function registerCommentTools(
       description:
         "Replace the body of an existing comment. Markdown by "
         + "default — if you are sending HTML, also pass "
-        + "`textFormat: 'html'`. Resolve commentId via "
+        + "`textFormat: 'html'`. QUIRK: Kaiten's comment "
+        + "markdown does NOT support ATX headings "
+        + "(`### Header` renders as literal text). Use bold or "
+        + "switch to HTML if you need a heading inside a "
+        + "comment. Resolve commentId via "
         + "kaiten_get_card_comments. The cardId is part of "
         + "the URL path — both cardId and commentId must "
         + "reference the actual card-comment pair (mismatched "
@@ -148,7 +164,10 @@ export function registerCommentTools(
         ),
         text: z.string().optional().describe(
           "New comment body. Markdown by default — pass "
-          + "`textFormat: 'html'` if you're sending HTML.",
+          + "`textFormat: 'html'` if you're sending HTML. "
+          + "Note: heading syntax (`### Header`) is NOT "
+          + "supported in comment markdown — render as literal "
+          + "text. Bold/list/code/link/blockquote work.",
         ),
         textFormat: textFormatComment,
         verbosity: verbositySchema,

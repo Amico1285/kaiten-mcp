@@ -12,6 +12,28 @@ import {
   optionalIsoDateTime, requireSomeFields,
   textFormatCard, textFormatCardId,
 } from "../utils/schemas.js";
+
+// Kaiten persists `due_date` independently of a flag named
+// `due_date_time_present`. Empirically (verified live
+// 2026-04-09 against 37controlseeing.kaiten.ru) the UI HIDES
+// the date entirely when the flag is false, even if `due_date`
+// is set. So setting `dueDate` from MCP without also setting
+// the flag silently produces an invisible deadline — the bug
+// behind 0.1.0/0.1.1/0.1.2.
+//
+// Fix: when the caller passes `dueDate` we always set
+// `due_date_time_present:true` unless they explicitly opted
+// out via `dueDateTimePresent:false`. The flag is also exposed
+// directly so a caller can flip it without changing the date
+// (or set the date with date-only display by passing false).
+function dueDateTimePresentDefault(
+  dueDate: string | undefined,
+  flag: boolean | undefined,
+): boolean | undefined {
+  if (flag !== undefined) return flag;
+  if (dueDate !== undefined) return true;
+  return undefined;
+}
 import {
   simplifyCard, simplifyList,
   simplifyUser,
@@ -97,12 +119,18 @@ export function registerCardTools(
       if (includeChildren) {
         const [card, children] = await Promise.all([
           get<Obj>(`/cards/${cardId}`),
-          get(`/cards/${cardId}/children`)
-            .catch(() => []),
+          get<Obj[]>(`/cards/${cardId}/children`)
+            .catch(() => [] as Obj[]),
         ]);
-        card.children = simplifyList(
-          children, simplifyCard, v,
-        );
+        // Inject RAW children — do NOT pre-simplify. simplifyCard
+        // will run a second pass and rebuild children via
+        // cardFns.min(ch), which reads `nested(ch, "board")?.title`
+        // from the raw child object. If we pre-simplify here, the
+        // nested `board`/`column` objects are stripped to flat
+        // `board_title`/`column_title` fields, and the second pass
+        // sees no nested data, returning null. Verified live in
+        // MCP Demo Space 2026-04-09.
+        card.children = children;
         return jsonResult(simplifyCard(card, v));
       }
 
@@ -123,8 +151,10 @@ export function registerCardTools(
         + "kaiten_list_spaces) to limit scope. The `query` "
         + "parameter performs a substring match against card "
         + "titles (server searches the `title` field only). "
-        + "The `condition` parameter is a magic number: 1=active "
-        + "(default), 2=archived only, 3=all (both). Use "
+        + "The `condition` parameter accepts only 1=live (default) "
+        + "or 2=archived — Kaiten has no 'all' filter. To list "
+        + "live + archived together, omit `condition` (defaults "
+        + "to live) and call again with `condition: 2`. Use "
         + "kaiten_get_card for full detail on a specific card. "
         + "Returns: array of cards (simplified per verbosity).",
       inputSchema: {
@@ -377,7 +407,18 @@ export function registerCardTools(
         + "Defaults to API caller if omitted.",
       ),
       dueDate: optionalIsoDateTime(
-        "Due date in ISO 8601 (YYYY-MM-DD or full datetime)",
+        "Due date in ISO 8601 (YYYY-MM-DD or full datetime). "
+        + "When set, `dueDateTimePresent` is automatically "
+        + "switched on so the date appears in the Kaiten UI.",
+      ),
+      dueDateTimePresent: boolish.optional().describe(
+        "Force the deadline visibility flag explicitly. Kaiten "
+        + "stores this as `due_date_time_present` and the UI "
+        + "hides the deadline entirely when it is false (even "
+        + "if `due_date` is set). Default behavior of this "
+        + "tool: auto-true whenever `dueDate` is provided. Pass "
+        + "false explicitly only if you intentionally want to "
+        + "stash a deadline that does not show in the UI.",
       ),
       verbosity: verbositySchema,
       },
@@ -407,6 +448,12 @@ export function registerCardTools(
           ["asap", p.asap],
           ["owner_id", p.ownerId],
           ["due_date", p.dueDate],
+          [
+            "due_date_time_present",
+            dueDateTimePresentDefault(
+              p.dueDate, p.dueDateTimePresent,
+            ),
+          ],
         ]),
       };
 
@@ -495,7 +542,18 @@ export function registerCardTools(
         + "an owner — cannot be unset, only reassigned.",
       ),
       dueDate: optionalIsoDateTime(
-        "Due date in ISO 8601 (YYYY-MM-DD or full datetime)",
+        "Due date in ISO 8601 (YYYY-MM-DD or full datetime). "
+        + "When set, `dueDateTimePresent` is automatically "
+        + "switched on so the date appears in the Kaiten UI.",
+      ),
+      dueDateTimePresent: boolish.optional().describe(
+        "Force the deadline visibility flag explicitly. Kaiten "
+        + "stores this as `due_date_time_present` and the UI "
+        + "hides the deadline entirely when it is false (even "
+        + "if `due_date` is set). Default behavior of this "
+        + "tool: auto-true whenever `dueDate` is provided. Pass "
+        + "false explicitly only if you intentionally want to "
+        + "stash a deadline that does not show in the UI.",
       ),
       properties: z.record(z.string(), z.unknown()).optional()
         .describe(
@@ -536,6 +594,12 @@ export function registerCardTools(
         ["asap", fields.asap],
         ["owner_id", fields.ownerId],
         ["due_date", fields.dueDate],
+        [
+          "due_date_time_present",
+          dueDateTimePresentDefault(
+            fields.dueDate, fields.dueDateTimePresent,
+          ),
+        ],
         ["properties", fields.properties],
       ]);
 
@@ -545,6 +609,16 @@ export function registerCardTools(
       // one real field — otherwise an LLM passing only
       // textFormat would silently send a body Kaiten interprets
       // as "no change" and get the empty-PATCH 403.
+      //
+      // Same logic for due_date_time_present: if the caller
+      // passes ONLY the visibility flag without a date, the
+      // body still has a real field (the flag itself is
+      // meaningful), but if the flag was auto-derived because
+      // of dueDate it's already paired with due_date so the
+      // requireSomeFields check will pass naturally. We only
+      // strip the auto-derived flag from the meaningful copy
+      // if it would otherwise be the only field (impossible
+      // because dueDate triggered it, but kept symmetric).
       const meaningful: Obj = { ...body };
       if (
         meaningful.text_format_type_id !== undefined
@@ -555,7 +629,8 @@ export function registerCardTools(
       requireSomeFields(meaningful, "kaiten_update_card", [
         "title", "description", "columnId", "laneId",
         "boardId", "typeId", "sizeText", "asap",
-        "ownerId", "dueDate", "properties",
+        "ownerId", "dueDate", "dueDateTimePresent",
+        "properties",
       ]);
 
       const card = await patch<Obj>(

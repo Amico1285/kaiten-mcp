@@ -43,13 +43,32 @@ export function buildSearchQuery(
     condition: String(p.condition),
     order_by: p.sortBy,
     order_direction: p.sortDirection,
-    search_fields: "title",
   };
+
+  // search_fields only makes sense paired with query — and Kaiten
+  // appears to filter results down to "" when search_fields is set
+  // without a query, producing silent empty results.
+  if (p.query) {
+    q.search_fields = "title";
+  }
+
+  // Scope resolution: explicit boardId implicitly identifies a
+  // single space, so do NOT layer KAITEN_DEFAULT_SPACE_ID on top of
+  // it — that combination produces a contradictory request
+  // (`board_id=X + space_id=Y` where X is not in Y) and Kaiten
+  // returns [] silently. Only fall back to the default space when
+  // neither boardId nor spaceId is given.
+  //
+  // Reproduced live 2026-04-09 in MCP Demo Space (board 1729535 in
+  // space 763607): search_cards(boardId=1729535) returned [] while
+  // get_board_cards(boardId=1729535) returned all 4 cards.
+  const effectiveSpaceId = p.spaceId
+    ?? (p.boardId !== undefined ? undefined : getDefaultSpaceId());
 
   addOptionalParams(q, [
     ["query", p.query],
     ["board_id", p.boardId],
-    ["space_id", p.spaceId ?? getDefaultSpaceId()],
+    ["space_id", effectiveSpaceId],
     ["column_id", p.columnId],
     ["lane_id", p.laneId],
     ["owner_id", p.ownerId],

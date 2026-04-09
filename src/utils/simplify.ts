@@ -85,10 +85,15 @@ const cardFns: SimplifyFns = {
     tags: Array.isArray(c.tags)
       ? (c.tags as Obj[]).map((t) => t.name)
       : [],
+    // Members carry a `type` field (1=member, 2=responsible).
+    // Returning {id, name, type} so the LLM can distinguish
+    // roles without a second kaiten_list_card_members call.
     members: Array.isArray(c.members)
-      ? (c.members as Obj[]).map(
-        (m) => m.full_name ?? m.username,
-      )
+      ? (c.members as Obj[]).map((m) => ({
+        id: m.id,
+        name: m.full_name ?? m.username ?? null,
+        type: m.type ?? 1,
+      }))
       : [],
     asap: c.asap ?? false,
     blocked: !!c.blocked,
@@ -135,10 +140,14 @@ const userFns: SimplifyFns = {
   }),
   // verbosity=max exposes persistable user profile fields that
   // an LLM may legitimately want (lang/timezone for scheduling
-  // hints, default_space_id for drill-down, avatar URLs for
-  // UI surfaces). Deliberately excludes the giant base64
-  // `avatar_uploaded_default_url` blob present in raw — use
-  // verbosity=raw if you actually need that payload.
+  // hints, default_space_id for drill-down, real avatar URLs).
+  // Deliberately STRIPS `avatar_initials_url` (a ~1.4 KB inline
+  // base64 PNG that Kaiten generates from initials) — it appears
+  // in every nested user object Kaiten returns and inflates
+  // responses massively (50 location-history entries = 50× the
+  // same PNG). The LLM cannot decode base64 PNG anyway. If a
+  // caller really needs the data URL it's available via
+  // verbosity=raw.
   max: (u) => ({
     id: u.id,
     uid: u.uid ?? null,
@@ -154,7 +163,6 @@ const userFns: SimplifyFns = {
     default_space_id: u.default_space_id ?? null,
     avatar_type: u.avatar_type ?? null,
     avatar_url: u.avatar_url ?? null,
-    avatar_initials_url: u.avatar_initials_url ?? null,
     created: u.created ?? null,
     updated: u.updated ?? null,
   }),

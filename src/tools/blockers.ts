@@ -90,8 +90,42 @@ export function registerBlockerTools(
       const blockers = await get<Obj[]>(
         `/cards/${cardId}/blockers`,
       );
+
+      // Kaiten's list endpoint returns `blocker_card_id` but
+      // `blocker_card_title` is always null. Hydrate the title
+      // via parallel lookups on the unique blocking card IDs so
+      // the LLM sees human-readable blocker context without a
+      // separate get_card round-trip.
+      const uniqueIds = [...new Set(
+        blockers
+          .map((b) => b.blocker_card_id)
+          .filter(
+            (id): id is number => typeof id === "number",
+          ),
+      )];
+      const titleMap = new Map<number, string>();
+      if (uniqueIds.length > 0) {
+        await Promise.all(
+          uniqueIds.map(async (id) => {
+            try {
+              const c = await get<Obj>(`/cards/${id}`);
+              if (typeof c.title === "string") {
+                titleMap.set(id, c.title);
+              }
+            } catch { /* deleted/inaccessible — leave null */ }
+          }),
+        );
+      }
+      const hydrated = blockers.map((b) => {
+        const bid = b.blocker_card_id;
+        if (typeof bid === "number" && titleMap.has(bid)) {
+          return { ...b, blocker_card_title: titleMap.get(bid) };
+        }
+        return b;
+      });
+
       return jsonResult(
-        blockers.map((b) => simplifyBlocker(b, v)),
+        hydrated.map((b) => simplifyBlocker(b, v)),
       );
     }),
   );
